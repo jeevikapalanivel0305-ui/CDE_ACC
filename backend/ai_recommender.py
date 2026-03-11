@@ -7,20 +7,24 @@ from dotenv import load_dotenv
 from google import genai
 
 # Load environment variables from .env file (if it exists)
-load_dotenv()
+env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv(env_path)
 
 def get_gemini_client():
     """Initialize Gemini client with API key from environment or streamlit secrets"""
     try:
         # Priority 1: Environment Variable (.env or system)
         api_key = os.getenv("GEMINI_API_KEY")
+        # st.write(f"DEBUG: Key from env: {api_key[:5] if api_key else 'None'}...")
         
-        # Priority 2: Streamlit Secrets
-        if not api_key:
+        # Priority 2: Streamlit Secrets (fallback if env not set OR is the placeholder)
+        if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
+            # st.write("DEBUG: Falling back to st.secrets")
             api_key = st.secrets.get("GEMINI_API_KEY")
             
         if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
-            st.error("⚠️ GEMINI_API_KEY not found. Please add it to .env or .streamlit/secrets.toml")
+            st.error(f"⚠️ GEMINI_API_KEY not found. App looked at: {env_path}")
+            # st.write(f"DEBUG: env_path exists: {os.path.exists(env_path)}")
             return None
             
         return genai.Client(api_key=api_key)
@@ -37,7 +41,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
     client = get_gemini_client()
     
     if not client:
-        st.warning("⚠️ Gemini API key not configured. Please add your GEMINI_API_KEY to .streamlit/secrets.toml")
+        st.warning("⚠️ Gemini API key not configured. Please add your GEMINI_API_KEY to .env or .streamlit/secrets.toml")
         return []
     
     # Construct Contextual Prompt

@@ -14,11 +14,18 @@ import json
 import io
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+if 'GEMINI_API_KEY' not in os.environ:
+    # Try absolute path fallback
+    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # Add current directory to path to find backend modules if needed
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import google.generativeai as genai
+from google import genai
 from backend.purview_connector import PurviewConnector
 from backend.fabric_connector import FabricConnector
 from backend.ai_recommender import render_ai_recommend, generate_cde_suggestions, get_gemini_client
