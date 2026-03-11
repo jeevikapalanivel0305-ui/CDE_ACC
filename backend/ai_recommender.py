@@ -180,69 +180,69 @@ def render_ai_recommend():
     st.markdown('<h3 style="margin-bottom: 0px;">AI CDE Recommender</h3>', unsafe_allow_html=True)
     st.markdown('<div style="color: #666; margin-bottom: 20px;">Identify Critical Data Elements from your data source using AI analysis.</div>', unsafe_allow_html=True)
     
-    col_ind, col_conn = st.columns(2)
-    
-    with col_ind:
-        st.markdown("**1. Industry Domain**")
-        selected_industry = st.selectbox("Industry", 
-                                       ["General", "Finance / Banking", "Healthcare", "Retail / E-Commerce", "Manufacturing", "Energy / Utilities", "Insurance"], 
-                                       key="ai_selected_industry")
+    # Combined Setup & Authentication Expander
+    with st.expander("🔐 Authentication", expanded=True):
+        col_ind, col_conn = st.columns(2)
         
-    with col_conn:
-        st.markdown("**2. Data Source**")
-        connector_type = st.selectbox("Connector", ["Excel", "Microsoft Fabric"], key="ai_connector_type")
-        
-        # Reset discovery when connector changes
-        if 'prev_ai_connector' not in st.session_state or st.session_state.prev_ai_connector != connector_type:
-            st.session_state.ai_discovered_cols = []
-            st.session_state.prev_ai_connector = connector_type
+        with col_ind:
+            st.markdown("**1. Industry Domain**")
+            selected_industry = st.selectbox("Industry", 
+                                           ["General", "Finance / Banking", "Healthcare", "Retail / E-Commerce", "Manufacturing", "Energy / Utilities", "Insurance"], 
+                                           key="ai_selected_industry")
+            
+        with col_conn:
+            st.markdown("**2. Data Source**")
+            connector_type = st.selectbox("Connector", ["Excel", "Microsoft Fabric"], key="ai_connector_type")
+            
+            # Reset discovery when connector changes
+            if 'prev_ai_connector' not in st.session_state or st.session_state.prev_ai_connector != connector_type:
+                st.session_state.ai_discovered_cols = []
+                st.session_state.prev_ai_connector = connector_type
 
-    # Connector specific inputs
-    file_columns = []
-    fabric_table = None
-    
-    if connector_type == "Excel":
-        uploaded_file = st.file_uploader("Upload Excel / CSV file", type=["csv", "xlsx"])
-        if uploaded_file:
-            st.session_state.ai_excel_filename = uploaded_file.name
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    df_preview = pd.read_csv(uploaded_file, nrows=5)
-                else:
-                    df_preview = pd.read_excel(uploaded_file, nrows=5)
-                file_columns = df_preview.columns.tolist()
-                st.session_state.ai_discovered_cols = file_columns
-                st.success(f"Loaded {len(file_columns)} columns.")
-            except Exception as e:
-                st.error(f"Error reading file: {str(e)}")
-    else:
-        # Fabric Connector UI - Flexible Auth Roles
-        col_sql, col_db = st.columns([2, 1])
-        with col_sql:
-            f_sql = st.text_input("SQL Endpoint / Connection String", 
-                                 value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
-                                 type="password",
-                                 key="ai_f_sql_input",
-                                 placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
-        with col_db:
-            f_db = st.text_input("Warehouse / Database Name", 
-                                value=st.session_state.connector_creds.get('fabric_database', ''), 
-                                placeholder="e.g. w1",
-                                key="ai_f_db_input")
+        # Connector specific inputs
+        file_columns = []
+        fabric_table = None
         
-        # Reset discovery when endpoint or database changes
-        if ('prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql or 
-            'prev_f_db' not in st.session_state or st.session_state.prev_f_db != f_db):
-            st.session_state.ai_fabric_tables = []
-            st.session_state.prev_f_sql = f_sql
-            st.session_state.prev_f_db = f_db
-            st.session_state.ai_fabric_error = None
-            st.session_state.connector_creds['fabric_sql_endpoint'] = f_sql
-            st.session_state.connector_creds['fabric_database'] = f_db
+        if connector_type == "Excel":
+            uploaded_file = st.file_uploader("Upload Excel / CSV file", type=["csv", "xlsx"])
+            if uploaded_file:
+                st.session_state.ai_excel_filename = uploaded_file.name
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df_preview = pd.read_csv(uploaded_file, nrows=5)
+                    else:
+                        df_preview = pd.read_excel(uploaded_file, nrows=5)
+                    file_columns = df_preview.columns.tolist()
+                    st.session_state.ai_discovered_cols = file_columns
+                    st.success(f"Loaded {len(file_columns)} columns.")
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+        else:
+            # Fabric Connector UI - Flexible Auth Roles
+            col_sql, col_db = st.columns([2, 1])
+            with col_sql:
+                f_sql = st.text_input("SQL Endpoint / Connection String", 
+                                     value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
+                                     type="password",
+                                     key="ai_f_sql_input",
+                                     placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
+            with col_db:
+                f_db = st.text_input("Warehouse / Database Name", 
+                                    value=st.session_state.connector_creds.get('fabric_database', ''), 
+                                    placeholder="e.g. w1",
+                                    key="ai_f_db_input")
+            
+            # Reset discovery when endpoint or database changes
+            if ('prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql or 
+                'prev_f_db' not in st.session_state or st.session_state.prev_f_db != f_db):
+                st.session_state.ai_fabric_tables = []
+                st.session_state.prev_f_sql = f_sql
+                st.session_state.prev_f_db = f_db
+                st.session_state.ai_fabric_error = None
+                st.session_state.connector_creds['fabric_sql_endpoint'] = f_sql
+                st.session_state.connector_creds['fabric_database'] = f_db
 
-        # Configuration Section
-        # Authentication Expander
-        with st.expander("🔐 Authentication", expanded=True):
+            # --- Internal Auth Logic (Simplified now that it's in a global expander) ---
             auth_mode = st.radio("Authentication Mode", 
                                 ["Interactive Login (Standard)", "Email & Password (AAD)", "Service Principal (Automation/Cloud)"], 
                                 index=1, horizontal=True, key="ai_auth_mode_radio")
@@ -346,109 +346,109 @@ def render_ai_recommend():
                     del st.session_state.ai_f_flow
                     st.rerun()
 
-        # Traditional Discover Button (for Service Principal / AAD Pwd)
-        if auth_mode != "Interactive Login (Standard)":
-            if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
-                if not f_sql:
-                    st.error("Please provide a SQL Endpoint first.")
-                else:
-                    with st.spinner("Connecting to Fabric..."):
-                        try:
-                            from backend.fabric_connector import FabricConnector
-                            st.session_state.ai_fabric_error = None
-                            
-                            # Route credentials
-                            if auth_mode == "Service Principal (Automation/Cloud)":
-                                t_id, c_id, c_sec = creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', '')
-                            else:
-                                t_id, c_id, c_sec = "", creds.get('fabric_email', ''), f"AAD_PWD:{creds.get('fabric_password', '')}"
-                            
-                            connector = FabricConnector(t_id, c_id, c_sec)
-                            tables = connector.list_tables(f_sql, database_name=f_db) 
-                            st.session_state.ai_fabric_tables = tables
-                            if not tables:
-                                st.session_state.ai_fabric_error = f"No tables found in '{f_db or 'Fabric'}'. Check permissions."
-                            else:
-                                st.success(f"Successfully discovered {len(tables)} tables in '{f_db}'!")
-                                st.rerun()
-                        except Exception as e:
-                            st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
-                            st.rerun()
-
-        # Connection Troubleshooting
-        with st.expander("🛠️ Connection Troubleshooting"):
-            st.info("If you are getting a timeout, ensure you have the correct ODBC Driver installed.")
-            if st.button("🔌 Run Environment Check"):
-                try:
-                    import pyodbc
-                    drivers = pyodbc.drivers()
-                    st.write("**Installed ODBC Drivers:**")
-                    for d in drivers:
-                        st.write(f"- {d}")
-                    if not any("SQL Server" in d for d in drivers):
-                        st.error("No SQL Server ODBC drivers found. Please install 'ODBC Driver 17 for SQL Server'.")
-                    st.markdown("[Download ODBC Driver](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)")
-                except Exception as ex:
-                    st.error(f"Failed to check environment: {str(ex)}")
-
-        # Display Error if any
-        if st.session_state.get('ai_fabric_error'):
-            st.error(st.session_state.ai_fabric_error)
-            if st.button("Clear Error"):
-                st.session_state.ai_fabric_error = None
-                st.rerun()
-
-        # Conditional Display: Dropdown vs Text Input
-        fabric_tables = st.session_state.get('ai_fabric_tables', [])
-        if fabric_tables:
-            fabric_table = st.selectbox("Select Table", ["--- Select Table ---"] + fabric_tables, key="ai_f_tab_sel_ref")
-            if fabric_table == "--- Select Table ---": fabric_table = None
-        else:
-            fabric_table = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", key="ai_f_tab_text_ref")
-
-        # Live discovery of Fabric Columns
-        if fabric_table and ('prev_ai_f_tab' not in st.session_state or st.session_state.prev_ai_f_tab != fabric_table):
-            with st.spinner(f"Discovering attributes for '{fabric_table}'..."):
-                try:
-                    from backend.fabric_connector import FabricConnector
-                    creds = st.session_state.connector_creds
-                    connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                    token = st.session_state.get('ai_f_token')
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db, access_token=token)
-                    if schema:
-                        st.session_state.ai_discovered_cols = [c['name'] for c in schema]
-                        st.session_state.prev_ai_f_tab = fabric_table
+            # Traditional Discover Button (for Service Principal / AAD Pwd)
+            if auth_mode != "Interactive Login (Standard)":
+                if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
+                    if not f_sql:
+                        st.error("Please provide a SQL Endpoint first.")
                     else:
-                        st.session_state.ai_discovered_cols = []
-                except Exception:
-                    st.session_state.ai_discovered_cols = []
+                        with st.spinner("Connecting to Fabric..."):
+                            try:
+                                from backend.fabric_connector import FabricConnector
+                                st.session_state.ai_fabric_error = None
+                                
+                                # Route credentials
+                                if auth_mode == "Service Principal (Automation/Cloud)":
+                                    t_id, c_id, c_sec = creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', '')
+                                else:
+                                    t_id, c_id, c_sec = "", creds.get('fabric_email', ''), f"AAD_PWD:{creds.get('fabric_password', '')}"
+                                
+                                connector = FabricConnector(t_id, c_id, c_sec)
+                                tables = connector.list_tables(f_sql, database_name=f_db) 
+                                st.session_state.ai_fabric_tables = tables
+                                if not tables:
+                                    st.session_state.ai_fabric_error = f"No tables found in '{f_db or 'Fabric'}'."
+                                else:
+                                    st.success(f"Successfully discovered {len(tables)} tables in '{f_db}'!")
+                                    st.rerun()
+                            except Exception as e:
+                                st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
+                                st.rerun()
 
-    # Business Requirement Input
-    requirement = st.text_area("Business Requirement / Context", 
-                              height=100, 
-                              placeholder="Example: We need to comply with GDPR for our European customer data...",
-                              key="ai_requirement")
-    
-    with st.expander("🔑 API Settings (Failsafe)"):
-        direct_key = st.text_input("Direct API Key", 
-                                  value="", 
-                                  type="password", 
-                                  help="Paste your new API key here if the .env file is not working.",
-                                  key="ai_direct_api_key")
-        
-        # Display masked existing key for verification
-        current_client = get_ai_client(direct_key=direct_key)
-        if current_client:
-            # We don't have a direct way to get the key back from the client easily in some versions, 
-            # so we check the env/direct_key
-            check_key = direct_key or os.getenv("AI_API_KEY")
-            if check_key and len(check_key) > 8:
-                masked = f"{check_key[:4]}...{check_key[-4:]}"
-                st.success(f"✅ Active Key: `{masked}`")
+            # Connection Troubleshooting
+            with st.expander("🛠️ Connection Troubleshooting"):
+                st.info("If you are getting a timeout, ensure you have the correct ODBC Driver installed.")
+                if st.button("🔌 Run Environment Check"):
+                    try:
+                        import pyodbc
+                        drivers = pyodbc.drivers()
+                        st.write("**Installed ODBC Drivers:**")
+                        for d in drivers:
+                            st.write(f"- {d}")
+                        if not any("SQL Server" in d for d in drivers):
+                            st.error("No SQL Server ODBC drivers found. Please install 'ODBC Driver 17 for SQL Server'.")
+                        st.markdown("[Download ODBC Driver](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)")
+                    except Exception as ex:
+                        st.error(f"Failed to check environment: {str(ex)}")
+
+            # Display Error if any
+            if st.session_state.get('ai_fabric_error'):
+                st.error(st.session_state.ai_fabric_error)
+                if st.button("Clear Error"):
+                    st.session_state.ai_fabric_error = None
+                    st.rerun()
+
+            # Conditional Display: Dropdown vs Text Input
+            fabric_tables = st.session_state.get('ai_fabric_tables', [])
+            if fabric_tables:
+                fabric_table = st.selectbox("Select Table", ["--- Select Table ---"] + fabric_tables, key="ai_f_tab_sel_ref")
+                if fabric_table == "--- Select Table ---": fabric_table = None
             else:
-                st.warning("⚠️ Key loaded but seems too short.")
-        else:
-            st.error("❌ No valid API key loaded.")
+                fabric_table = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", key="ai_f_tab_text_ref")
+
+            # Live discovery of Fabric Columns
+            if fabric_table and ('prev_ai_f_tab' not in st.session_state or st.session_state.prev_ai_f_tab != fabric_table):
+                with st.spinner(f"Discovering attributes for '{fabric_table}'..."):
+                    try:
+                        from backend.fabric_connector import FabricConnector
+                        creds = st.session_state.connector_creds
+                        connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
+                        token = st.session_state.get('ai_f_token')
+                        schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db, access_token=token)
+                        if schema:
+                            st.session_state.ai_discovered_cols = [c['name'] for c in schema]
+                            st.session_state.prev_ai_f_tab = fabric_table
+                        else:
+                            st.session_state.ai_discovered_cols = []
+                    except Exception:
+                        st.session_state.ai_discovered_cols = []
+
+        # Business Requirement Input
+        requirement = st.text_area("Business Requirement / Context", 
+                                  height=100, 
+                                  placeholder="Example: We need to comply with GDPR for our European customer data...",
+                                  key="ai_requirement")
+        
+        with st.expander("🔑 API Settings (Failsafe)"):
+            direct_key = st.text_input("Direct API Key", 
+                                      value="", 
+                                      type="password", 
+                                      help="Paste your new API key here if the .env file is not working.",
+                                      key="ai_direct_api_key")
+            
+            # Display masked existing key for verification
+            current_client = get_ai_client(direct_key=direct_key)
+            if current_client:
+                # We don't have a direct way to get the key back from the client easily in some versions, 
+                # so we check the env/direct_key
+                check_key = direct_key or os.getenv("AI_API_KEY")
+                if check_key and len(check_key) > 8:
+                    masked = f"{check_key[:4]}...{check_key[-4:]}"
+                    st.success(f"✅ Active Key: `{masked}`")
+                else:
+                    st.warning("⚠️ Key loaded but seems too short.")
+            else:
+                st.error("❌ No valid API key loaded.")
 
     if st.button("Analyze & Recommend CDEs", type="primary"):
         cols_to_analyze = file_columns
