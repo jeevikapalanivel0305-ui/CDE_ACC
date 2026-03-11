@@ -230,6 +230,7 @@ class FabricConnector:
         try:
             # Clean the string
             raw_endpoint = str(connection_string).strip()
+            raw_endpoint = str(raw_endpoint).strip()
             if raw_endpoint.startswith("https://"): raw_endpoint = raw_endpoint.replace("https://", "")
             if raw_endpoint.startswith("tcp:"): raw_endpoint = raw_endpoint.replace("tcp:", "")
             
@@ -237,56 +238,61 @@ class FabricConnector:
             if "api.fabric.microsoft.com" in raw_endpoint.lower():
                 raise Exception("The URL provided looks like a Fabric API URL. Please use the 'SQL Connection String' (e.g. xxxxxxx.datawarehouse.fabric.microsoft.com)")
 
-            # 1. Find the best driver
+            # 1. Identify valid driver
             drivers = pyodbc.drivers()
             best_driver = next((d for d in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"] if d in drivers), "SQL Server")
             
-            # 2. Build connection string in standard Fabric format
+            # 2. Build connection string
             server_name = raw_endpoint.split(";")[0]
             if "," not in server_name and ":" not in server_name:
-                server_name += ",1433" # Explicitly use Port 1433 as required by Fabric
+                server_name += ",1433"
             
-            # Start with mandatory Fabric attributes
             connection_string = f"Driver={{{best_driver}}};Server={server_name}"
             connection_string += ";Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=60"
             
-            # Inject Database if provided (Lakehouse/Warehouse name)
             if database_name:
                 connection_string += f";Database={database_name}"
-            elif "Initial Catalog=" in raw_endpoint:
-                # Direct database extraction from a full user string
-                db_part = raw_endpoint.split("Initial Catalog=")[1].split(";")[0]
-                connection_string += f";Database={db_part}"
             elif "DATABASE=" in raw_endpoint.upper():
                  db_part = raw_endpoint.upper().split("DATABASE=")[1].split(";")[0]
                  connection_string += f";Database={db_part}"
-            
+
             # 3. Handle Authentication
-            if "AUTHENTICATION=" not in connection_string.upper():
+            if access_token:
+                # TOKEN MODE: String must NOT have UID/PWD/Authentication
+                print("🔑 [SQL] Connecting using Access Token (MSAL)...")
+            elif "AUTHENTICATION=" not in connection_string.upper():
                 if self.client_id and self.client_secret:
-                    # Case A: Service Principal (Client ID + Secret)
+                    # Service Principal
                     connection_string += f";UID={self.client_id};PWD={self.client_secret};Authentication=ActiveDirectoryServicePrincipal"
                 elif self.client_secret and self.client_secret.startswith("AAD_PWD:"):
-                    # Case B: AAD Password (Email + Password)
+                    # AAD Password
                     actual_pwd = self.client_secret.replace("AAD_PWD:", "")
                     connection_string += f";UID={self.client_id};PWD={actual_pwd};Authentication=ActiveDirectoryPassword"
                 elif self.client_id:
-                    # Case C: Interactive Login with email hint (for MFA)
+                    # Interactive with hint
                     connection_string += f";UID={self.client_id};Authentication=ActiveDirectoryInteractive"
                 else:
-                    # Case D: Base Interactive Login
+                    # Base Interactive
                     connection_string += ";Authentication=ActiveDirectoryInteractive"
 
-            # Mask password for logging
+            # Mask logging
             log_str = connection_string
             if "PWD=" in log_str:
                 import re
                 log_str = re.sub(r"PWD=[^;]+", "PWD=********", connection_string)
+            print(f"🔗 [SQL] String: {log_str}")
             
-            print(f"🔗 [SQL] Connecting with robust string: {log_str}")
-            
-            # 5. Connect (autocommit=True helps with some cloud handshakes)
-            conn = pyodbc.connect(connection_string, timeout=60, autocommit=True)
+            # 4. Connect
+            if access_token:
+                # Convert token to bytes for ODBC attribute
+                token_bytes = access_token.encode("utf-16-le")
+                token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
+                
+                # Create connection object without connecting yet
+                conn = pyodbc.connect(connection_string, timeout=60, autocommit=True, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+            else:
+                conn = pyodbc.connect(connection_string, timeout=60, autocommit=True)
+                
             print("✅ [SQL] Connection successful.")
             return conn
         except Exception as e:
