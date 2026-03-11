@@ -246,26 +246,32 @@ def render_ai_recommend():
                             c_sec = ""
                         
                         connector = FabricConnector(t_id, c_id, c_sec)
-                        # Explicitly mention timeout in the UI log or keep it in the backend logic
-                        tables = connector.list_tables(f_sql, database_name=None) # Passing None to use default/connection string database
+                        tables = connector.list_tables(f_sql, database_name=None) 
                         st.session_state.ai_fabric_tables = tables
                         if not tables:
                             st.session_state.ai_fabric_error = "No tables found or access denied. Check your permissions in the Fabric Workspace."
                         else:
                             st.success(f"Successfully discovered {len(tables)} tables!")
-                        st.rerun()
                     except Exception as e:
                         st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
+                    finally:
                         st.rerun()
-                        st.session_state.ai_fabric_tables = tables
-                        if not tables:
-                            st.session_state.ai_fabric_error = "No tables found or access denied."
-                        else:
-                            st.success(f"Found {len(tables)} tables!")
-                        st.rerun()
-                    except Exception as e:
-                        st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
-                        st.rerun()
+
+        # Connection Troubleshooting
+        with st.expander("🛠️ Connection Troubleshooting"):
+            st.info("If you are getting a timeout, ensure you have the correct ODBC Driver installed.")
+            if st.button("🔌 Run Environment Check"):
+                try:
+                    import pyodbc
+                    drivers = pyodbc.drivers()
+                    st.write("**Installed ODBC Drivers:**")
+                    for d in drivers:
+                        st.write(f"- {d}")
+                    if not any("SQL Server" in d for d in drivers):
+                        st.error("No SQL Server ODBC drivers found. Please install 'ODBC Driver 17 for SQL Server'.")
+                    st.markdown("[Download ODBC Driver](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)")
+                except Exception as ex:
+                    st.error(f"Failed to check environment: {str(ex)}")
 
         # Display Error if any
         if st.session_state.get('ai_fabric_error'):

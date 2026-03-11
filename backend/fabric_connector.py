@@ -249,6 +249,15 @@ class FabricConnector:
             connection_string = f"DRIVER={{{best_driver}}};SERVER={server_name}"
             connection_string += ";Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=60"
             
+            # Inject Database if provided (CRITICAL for successful handshake in some environments)
+            if database_name:
+                connection_string += f";DATABASE={database_name}"
+            elif ";" in raw_endpoint:
+                # Try to extract database from the original endpoint string if not passed explicitly
+                for attr in raw_endpoint.split(";")[1:]:
+                    if "DATABASE=" in attr.upper():
+                        connection_string += f";{attr}"
+            
             # 3. Handle Authentication
             if "AUTHENTICATION=" not in connection_string.upper():
                 if self.client_id and self.client_secret:
@@ -273,8 +282,8 @@ class FabricConnector:
             
             print(f"🔗 [SQL] Connecting with 60s LoginTimeout: {log_str}")
             
-            # 5. Connect (timeout increased significantly for slow handshakes)
-            conn = pyodbc.connect(connection_string, timeout=60)
+            # 5. Connect (autocommit=True helps with some cloud handshakes)
+            conn = pyodbc.connect(connection_string, timeout=60, autocommit=True)
             print("✅ [SQL] Connection successful.")
             return conn
         except Exception as e:
