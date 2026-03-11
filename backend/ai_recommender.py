@@ -12,25 +12,29 @@ from pathlib import Path
 dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-def get_gemini_client():
-    """Initialize Gemini client with API key from environment or streamlit secrets"""
+def get_gemini_client(direct_key=None):
+    """Initialize Gemini client with API key from environment, secrets, or direct input"""
     try:
-        # Priority 1: Environment Variable (.env or system)
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = direct_key
         
-        # Priority 2: Manual .env parse fallback
+        # Priority 1: Environment Variable (.env or system)
+        if not api_key:
+            api_key = os.getenv("GEMINI_API_KEY")
+        
+        # Priority 2: Manual .env parse fallback (BOM-aware)
         if (not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE") and dotenv_path.exists():
             try:
-                content = dotenv_path.read_text()
+                # utf-8-sig handles the Byte Order Mark (BOM) automatically
+                content = dotenv_path.read_text(encoding="utf-8-sig")
                 for line in content.splitlines():
                     if 'GEMINI_API_KEY=' in line:
                         api_key = line.split('=', 1)[1].strip().strip('"').strip("'")
-                        os.environ["GEMINI_API_KEY"] = api_key # Put it back in env for consistency
+                        os.environ["GEMINI_API_KEY"] = api_key 
                         break
             except Exception:
                 pass
 
-        # Priority 3: Streamlit Secrets (fallback if env not set OR is the placeholder)
+        # Priority 3: Streamlit Secrets
         if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
             api_key = st.secrets.get("GEMINI_API_KEY")
             
@@ -38,16 +42,13 @@ def get_gemini_client():
             st.error(f"⚠️ GEMINI_API_KEY not found in environment or secrets.")
             st.info(f"💡 The app tried to load from: `{dotenv_path.absolute()}`")
             if dotenv_path.exists():
-                st.write("✅ .env file exists at that location.")
+                st.write("✅ .env file exists.")
                 st.write(f"ℹ️ File size: {dotenv_path.stat().st_size} bytes")
-                # Test for BOM or encoding issues
                 try:
                     with open(dotenv_path, 'rb') as f:
                         header = f.read(10)
                         st.write(f"🔍 File header bytes: `{header.hex(' ')}`")
                 except: pass
-            else:
-                st.write("❌ .env file NOT found at that location.")
             return None
             
         return genai.Client(api_key=api_key)
@@ -59,9 +60,9 @@ def get_gemini_client():
 # AI RECOMMENDATION LOGIC
 # ============================================
 
-def generate_cde_suggestions(business_requirement, industry="General", file_columns=None):
+def generate_cde_suggestions(business_requirement, industry="General", file_columns=None, direct_key=None):
     """Generate CDE suggestions using Gemini based on business requirement, industry, and optional file schema"""
-    client = get_gemini_client()
+    client = get_gemini_client(direct_key=direct_key)
     
     if not client:
         st.warning("⚠️ Gemini API key not configured. Please add your GEMINI_API_KEY to .env or .streamlit/secrets.toml")
@@ -420,6 +421,27 @@ def render_ai_recommend():
                               placeholder="Example: We need to comply with GDPR for our European customer data...",
                               key="ai_requirement")
     
+    with st.expander("🔑 Gemini API Settings (Failsafe)"):
+        direct_key = st.text_input("Direct Gemini API Key", 
+                                  value="", 
+                                  type="password", 
+                                  help="Paste your new API key here if the .env file is not working.",
+                                  key="ai_direct_gemini_key")
+        
+        # Display masked existing key for verification
+        current_client = get_gemini_client(direct_key=direct_key)
+        if current_client:
+            # We don't have a direct way to get the key back from the client easily in some versions, 
+            # so we check the env/direct_key
+            check_key = direct_key or os.getenv("GEMINI_API_KEY")
+            if check_key and len(check_key) > 8:
+                masked = f"{check_key[:4]}...{check_key[-4:]}"
+                st.success(f"✅ Active Key: `{masked}`")
+            else:
+                st.warning("⚠️ Key loaded but seems too short.")
+        else:
+            st.error("❌ No valid Gemini API key loaded.")
+
     if st.button("Analyze & Recommend CDEs", type="primary"):
         cols_to_analyze = file_columns
         
@@ -453,7 +475,7 @@ def render_ai_recommend():
         else:
             # Main Analysis Logic
             with st.spinner("Analyzing..."):
-                suggestions = generate_cde_suggestions(requirement, selected_industry, cols_to_analyze)
+                suggestions = generate_cde_suggestions(requirement, industry=selected_industry, file_columns=cols_to_analyze, direct_key=direct_key)
                 st.session_state.ai_cde_suggestions = suggestions
                 # Store columns for reference display
                 st.session_state.ai_discovered_cols = cols_to_analyze
