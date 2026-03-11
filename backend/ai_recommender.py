@@ -231,14 +231,17 @@ def render_ai_recommend():
                     try:
                         import msal
                         client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554" 
-                        authority = "https://login.microsoftonline.com/common"
+                        # Use provided Tenant ID if available, else default to 'organizations'
+                        tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
+                        authority = f"https://login.microsoftonline.com/{tenant}"
+                        
                         app = msal.PublicClientApplication(client_id, authority=authority)
                         flow = app.initiate_device_flow(scopes=["https://database.windows.net//.default"])
                         if "user_code" in flow:
                             st.session_state.ai_f_flow = flow
                             st.rerun()
                         else:
-                            st.error(f"Flow error: {flow.get('error_description')}")
+                            st.error(f"Flow error: {flow.get('error_description', 'No tenant found. Please provide a Tenant ID below if needed.')}")
                     except Exception as e:
                         st.error(f"Init error: {str(e)}")
             
@@ -252,7 +255,8 @@ def render_ai_recommend():
                                 import msal
                                 from backend.fabric_connector import FabricConnector
                                 client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554"
-                                app = msal.PublicClientApplication(client_id, authority="https://login.microsoftonline.com/common")
+                                tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
+                                app = msal.PublicClientApplication(client_id, authority=f"https://login.microsoftonline.com/{tenant}")
                                 result = app.acquire_token_by_device_flow(st.session_state.ai_f_flow)
                                 
                                 if "access_token" in result:
