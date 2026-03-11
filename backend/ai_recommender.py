@@ -200,40 +200,49 @@ def render_ai_recommend():
 
         # Configuration Section
         st.write("---")
-        auth_mode = st.radio("Authentication Mode", ["Interactive Login (Standard)", "Service Principal (Automation/Cloud)"], index=0, horizontal=True)
+        auth_mode = st.radio("Authentication Mode", 
+                            ["Interactive Login (Standard)", "Email & Password (AAD)", "Service Principal (Automation/Cloud)"], 
+                            index=1, horizontal=True)
         
         creds = st.session_state.connector_creds
-        use_sp = "Service Principal" in auth_mode
         
-        if use_sp:
+        if auth_mode == "Service Principal (Automation/Cloud)":
             st.info("💡 Service Principal is required for Streamlit Cloud automation.")
             col1, col2, col3 = st.columns(3)
             with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant_fl")
             with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
             with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
+        elif auth_mode == "Email & Password (AAD)":
+            st.info("💡 Use this for direct authentication without a popup.")
+            col1, col2 = st.columns(2)
+            with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
+            with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
         else:
             st.info("💡 Interactive Login will prompt for your email and password in a separate window.")
-            # Add email field for interactive mode to help pyodbc trigger the prompt
-            creds['fabric_email'] = st.text_input("Email (Optional)", value=creds.get('fabric_email', ''), placeholder="yourname@domain.com", key="ai_f_email_fl")
+            creds['fabric_email'] = st.text_input("Email (Optional)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
 
         # Trigger Discovery
         if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
             if not f_sql:
                 st.error("Please provide a SQL Endpoint first.")
             else:
-                with st.spinner("Connecting to Fabric..."):
+                with st.spinner("Connecting to Fabric (this may take up to 60s)..."):
                     try:
                         from backend.fabric_connector import FabricConnector
                         st.session_state.ai_fabric_error = None
                         
-                        # Use local vars for connector
-                        if use_sp:
+                        # Route credentials based on mode
+                        if auth_mode == "Service Principal (Automation/Cloud)":
                             t_id = creds.get('fabric_tenant_id', '')
                             c_id = creds.get('fabric_client_id', '')
                             c_sec = creds.get('fabric_client_secret', '')
+                        elif auth_mode == "Email & Password (AAD)":
+                            t_id = ""
+                            c_id = creds.get('fabric_email', '')
+                            # Use the prefix to tell the connector to use AAD Password mode
+                            c_sec = f"AAD_PWD:{creds.get('fabric_password', '')}"
                         else:
                             t_id = ""
-                            # Pass email as client_id to trigger interactive UID prompt
                             c_id = creds.get('fabric_email', '') 
                             c_sec = ""
                         
