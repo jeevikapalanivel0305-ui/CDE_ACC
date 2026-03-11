@@ -244,11 +244,14 @@ def render_ai_recommend():
                         import msal
                         # Priority: User Custom ID > Azure PowerShell ID
                         client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
+                        # Use provided Tenant ID OR name if available, else default to 'organizations'
                         tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
                         authority = f"https://login.microsoftonline.com/{tenant}"
                         
                         app = msal.PublicClientApplication(client_id, authority=authority)
-                        flow = app.initiate_device_flow(scopes=["https://database.windows.net//.default"])
+                        # FIX: Use single slash and ensure it's v2.0 compatible
+                        scopes = ["https://database.windows.net/.default"]
+                        flow = app.initiate_device_flow(scopes=scopes)
                         if "user_code" in flow:
                             st.session_state.ai_f_flow = flow
                             st.rerun()
