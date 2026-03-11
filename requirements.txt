@@ -6,3 +6,5 @@ pyodbc
 google-genai
 python-dotenv
 openpyxl
+msal
+msal-extensions
