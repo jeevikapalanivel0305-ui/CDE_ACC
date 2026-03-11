@@ -16,11 +16,10 @@ import sys
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-if 'GEMINI_API_KEY' not in os.environ:
-    # Try absolute path fallback
-    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+# Standardized .env loading
+from pathlib import Path
+dotenv_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=dotenv_path)
 
 # Add current directory to path to find backend modules if needed
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

@@ -6,9 +6,11 @@ import os
 from dotenv import load_dotenv
 from google import genai
 
-# Load environment variables from .env file (if it exists)
-env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
-load_dotenv(env_path)
+# Load environment variables from .env file
+# We use an absolute path relative to this file's directory
+from pathlib import Path
+dotenv_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=dotenv_path)
 
 def get_gemini_client():
     """Initialize Gemini client with API key from environment or streamlit secrets"""
@@ -23,8 +25,12 @@ def get_gemini_client():
             api_key = st.secrets.get("GEMINI_API_KEY")
             
         if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
-            st.error(f"⚠️ GEMINI_API_KEY not found. App looked at: {env_path}")
-            # st.write(f"DEBUG: env_path exists: {os.path.exists(env_path)}")
+            st.error(f"⚠️ GEMINI_API_KEY not found in environment or secrets.")
+            st.info(f"💡 The app tried to load from: `{dotenv_path.absolute()}`")
+            if dotenv_path.exists():
+                st.write("✅ .env file exists at that location.")
+            else:
+                st.write("❌ .env file NOT found at that location.")
             return None
             
         return genai.Client(api_key=api_key)
