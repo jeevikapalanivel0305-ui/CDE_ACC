@@ -460,14 +460,16 @@ def render_ai_recommend():
                         creds.get('fabric_client_id', ''),
                         creds.get('fabric_client_secret', '')
                     )
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name="w1")
+                    # Use the specific database provided by the user
+                    token = st.session_state.get('ai_f_token')
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db, access_token=token)
                     if schema:
                         cols_to_analyze = [c['name'] for c in schema]
                     else:
-                        st.error("Could not fetch table schema.")
+                        st.error(f"Could not fetch table schema for '{fabric_table}' in '{f_db or 'Fabric'}'. Discovery failed.")
                         return
                 except Exception as e:
-                    st.error(f"Fabric Error: {str(e)}")
+                    st.error(f"Fabric Analysis Error: {str(e)}")
                     return
         
         if not requirement and not cols_to_analyze:
