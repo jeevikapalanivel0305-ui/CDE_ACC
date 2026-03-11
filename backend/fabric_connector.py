@@ -271,8 +271,8 @@ class FabricConnector:
 
             print(f"� [SQL] Connecting with string: {connection_string.split('PWD=')[0]}... [pwd masked]")
             
-            # 5. Connect (timeout shortened for faster feedback)
-            conn = pyodbc.connect(connection_string, timeout=15)
+            # 5. Connect (timeout increased for reliability)
+            conn = pyodbc.connect(connection_string, timeout=30)
             print("🔗 [SQL] Connection successful.")
             return conn
         except Exception as e:
