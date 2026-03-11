@@ -1,0 +1,792 @@
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap');
+
+/* ======================================= */
+/* MAIN APP STYLING                        */
+/* ======================================= */
+.stApp {
+    font-family: 'Inter', sans-serif;
+    background-color: #ffffff;
+    font-size: 14px;
+    color: #1a1a1a;
+}
+
+/* ======================================= */
+/* LAYOUT                                  */
+/* ======================================= */
+.block-container {
+    padding-top: 0rem !important;
+    padding-bottom: 2rem !important;
+    max-width: 100% !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+}
+
+/* ======================================= */
+/* SIDEBAR STYLING                         */
+/* ======================================= */
+[data-testid="stSidebar"] {
+    background-color: #ffffff !important;
+    border-right: 1px solid #e5e7eb;
+}
+
+[data-testid="stSidebar"] [data-testid="stMarkdown"] {
+    color: #1a1a1a;
+}
+
+/* Sidebar nav buttons - fully hidden but clickable overlay */
+[data-testid="stSidebar"] .stButton>button {
+    background: transparent !important;
+    color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+    font-size: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
+    width: 100% !important;
+    display: block !important;
+}
+
+[data-testid="stSidebar"] .stButton {
+    margin-top: -32px !important;
+    margin-bottom: 8px !important;
+    height: 0px !important;
+    overflow: visible !important;
+    z-index: 10 !important;
+}
+
+/* Ensure no text leaking */
+[data-testid="stSidebar"] .stButton p,
+[data-testid="stSidebar"] .stButton span {
+    display: none !important;
+}
+
+/* Hide divider lines in sidebar */
+[data-testid="stSidebar"] hr {
+    display: none !important;
+}
+
+/* ======================================= */
+/* CUSTOM HEADER - Dark with Red Badge     */
+/* ======================================= */
+.acc-header {
+    background: #ffffff;
+    padding: 14px 32px;
+    margin: 0 -1.5rem 0 -1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 100;
+}
+
+.acc-header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.acc-badge {
+    background: #CC0000;
+    color: white;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.acc-subtitle {
+    color: #9ca3af;
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+}
+
+.acc-header-center {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex: 1;
+    justify-content: center;
+    padding: 0 40px;
+}
+
+.acc-header-right {
+    display: flex;
+    align-items: center;
+}
+
+.acc-header-right img {
+    height: 32px;
+    width: auto;
+}
+
+/* Red accent bar below header */
+.acc-red-bar {
+    background: #CC0000;
+    height: 5px;
+    margin: 0 -1.5rem 0 -1.5rem;
+}
+
+/* ======================================= */
+/* STEPPER NAVIGATION (in header)          */
+/* ======================================= */
+.stepper-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+    min-width: 100px;
+}
+
+.stepper-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.stepper-label.active {
+    color: #CC0000;
+    font-weight: 600;
+}
+
+.stepper-label.completed {
+    color: #CC0000;
+    font-weight: 600;
+}
+
+.stepper-circle {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    border: 2px solid #d1d5db;
+    color: #9ca3af;
+    background: transparent;
+    transition: all 0.3s;
+}
+
+.stepper-circle.active {
+    background: #CC0000;
+    border-color: #CC0000;
+    color: white;
+}
+
+.stepper-circle.completed {
+    background: #CC0000;
+    border-color: #CC0000;
+    color: white;
+}
+
+.stepper-connector {
+    width: 60px;
+    height: 2px;
+    background: #d1d5db;
+    margin: 0 4px;
+    align-self: flex-end;
+    margin-bottom: 11px;
+}
+
+.stepper-connector.completed {
+    background: #CC0000;
+}
+
+/* ======================================= */
+/* TAB NAVIGATION BAR                      */
+/* ======================================= */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2px;
+    background: white;
+    border-radius: 0;
+    padding: 8px 0 0 0;
+    margin: 0 -1.5rem 20px -1.5rem;
+    padding-left: 16px;
+    border-bottom: none;
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: #ffffff !important;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 0 !important;
+    background: #1a1a1a !important;
+    border: 1px solid #1a1a1a !important;
+    border-bottom: none !important;
+    transition: all 0.2s;
+    margin-bottom: 0;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background: #333333 !important;
+}
+
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: #ffffff !important;
+    background: #CC0000 !important;
+    border: 1px solid #CC0000 !important;
+    font-weight: 600;
+}
+
+/* Tab highlight bar */
+.stTabs [data-baseweb="tab-highlight"] {
+    display: none !important;
+}
+
+/* Tab border */
+.stTabs [data-baseweb="tab-border"] {
+    display: none;
+}
+
+/* ======================================= */
+/* BUTTONS                                 */
+/* ======================================= */
+/* Global Primary Buttons - Navy Blue (#1a1b41) */
+div[data-testid="stFormSubmitButton"]>button,
+div.stButton>button[kind="primary"],
+div[data-testid="stBaseButton-primary"],
+.stButton button[kind="primary"] {
+    background-color: #1a1b41 !important;
+    color: white !important;
+    border: 1px solid #1a1b41 !important;
+    border-radius: 8px !important;
+    padding: 6px 24px !important;
+    min-height: 38px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+    transition: background-color 0.2s ease !important;
+}
+
+div[data-testid="stFormSubmitButton"]>button:hover,
+div.stButton>button[kind="primary"]:hover,
+div[data-testid="stBaseButton-primary"]:hover,
+.stButton button[kind="primary"]:hover {
+    background-color: #2d2d5f !important;
+    border-color: #2d2d5f !important;
+    color: white !important;
+}
+
+/* Ensure icons/text inside primary buttons are white */
+div[data-testid="stFormSubmitButton"]>button *,
+div.stButton>button[kind="primary"] * {
+    color: white !important;
+}
+
+/* Secondary / outline buttons */
+.stButton>button[kind="secondary"] {
+    background: white !important;
+    color: #1a1b41 !important;
+    border: 1px solid #6b7280 !important;
+    border-radius: 8px !important;
+    padding: 6px 20px !important;
+    min-height: 38px !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    font-weight: 500 !important;
+}
+
+.stButton>button[kind="secondary"]:hover {
+    background: #f3f4f6 !important;
+    border-color: #1a1b41 !important;
+    color: #1a1b41 !important;
+}
+
+/* Tighten File Uploader Layout */
+[data-testid="stFileUploader"] {
+    padding: 0 !important;
+}
+
+[data-testid="stFileUploader"] {
+    max-width: 400px !important;
+}
+
+/* Make Uploader Label bigger */
+[data-testid="stFileUploader"] label[data-testid="stWidgetLabel"] p {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #1a1a1a !important;
+    margin-bottom: 10px !important;
+}
+
+[data-testid="stFileUploader"] section {
+    padding: 2px 10px !important;
+    min-height: 40px !important;
+}
+
+[data-testid="stFileUploader"] section>div {
+    padding: 0 !important;
+}
+
+/* Shorten and Force Transparency on the 'Remove' (X) button for uploaded files */
+[data-testid="stFileUploaderDeleteBtn"],
+[data-testid="stFileUploaderDeleteBtn"] div,
+[data-testid="stFileUploaderDeleteBtn"]:hover,
+[data-testid="stFileUploaderDeleteBtn"]:active,
+[data-testid="stFileUploaderDeleteBtn"]:focus {
+    width: 20px !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    padding: 0 !important;
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Tighten the file entry row */
+[data-testid="stFileUploaderFileName"] {
+    font-size: 12px !important;
+}
+
+[data-testid="stFileUploader"] p,
+[data-testid="stFileUploader"] span {
+    font-size: 11px !important;
+}
+
+/* Ensure Download Button matches Primary Styling */
+div.stDownloadButton>button {
+    background-color: #ffffff !important;
+    color: #1a1b41 !important;
+    border: 1px solid #6b7280 !important;
+    border-radius: 8px !important;
+    padding: 6px 20px !important;
+    min-height: 38px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+div.stDownloadButton>button[kind="primary"] {
+    background-color: #1a1b41 !important;
+    color: #ffffff !important;
+    border: 1px solid #1a1b41 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+div.stDownloadButton>button:hover {
+    background-color: #f3f4f6 !important;
+    border-color: #1a1b41 !important;
+}
+
+div.stDownloadButton>button[kind="primary"]:hover {
+    background-color: #2d2d5f !important;
+    border-color: #2d2d5f !important;
+}
+
+/* ======================================= */
+/* FORM INPUTS                             */
+/* ======================================= */
+div[data-baseweb="select"]>div {
+    background-color: white !important;
+    border: 1px solid #6b7280 !important;
+    color: #1a1a1a !important;
+    border-radius: 8px !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+div[data-baseweb="select"] span {
+    color: #1a1a1a !important;
+}
+
+ul[data-baseweb="menu"] li {
+    color: #1a1a1a !important;
+}
+
+.stTextArea textarea,
+.stTextInput input {
+    background-color: #ffffff !important;
+    color: #1a1a1a !important;
+    border: 1px solid #6b7280 !important;
+    border-radius: 8px !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Darker Form Borders */
+div[data-testid="stForm"] {
+    border: 1px solid #9ca3af !important;
+    border-radius: 8px !important;
+}
+
+/* Robust Checkbox Styling - Navy Blue Override */
+[data-testid="stCheckbox"] div[role="checkbox"][aria-checked="true"],
+[data-testid="stCheckbox"] div[data-baseweb="checkbox"]>div,
+.stCheckbox div[data-baseweb="checkbox"]>div {
+    background-color: #1a1b41 !important;
+    border-color: #1a1b41 !important;
+}
+
+[data-testid="stCheckbox"] div[role="checkbox"][aria-checked="false"],
+[data-testid="stCheckbox"] div[data-baseweb="checkbox"] {
+    border-color: #6b7280;
+}
+
+[data-testid="stCheckbox"] div[role="checkbox"]:hover,
+[data-testid="stCheckbox"] label:hover div[data-baseweb="checkbox"]>div {
+    border-color: #1a1b41 !important;
+}
+
+/* Aggressive Checkbox Background Fix */
+div[data-testid="stCheckbox"] label span div[role="checkbox"] {
+    background-color: #1a1b41 !important;
+}
+
+div[data-testid="stCheckbox"] label span div[role="checkbox"][aria-checked="true"] {
+    background-color: #1a1b41 !important;
+    border-color: #1a1b41 !important;
+}
+
+/* Ensure the checkmark itself remains white */
+div[data-testid="stCheckbox"] label span div[role="checkbox"] svg path {
+    stroke: white !important;
+}
+
+/* ======================================= */
+/* SLIDER STYLING - Navy Blue              */
+/* ======================================= */
+/* Target the slider track and thumb */
+div[data-testid="stSlider"] [data-baseweb="slider"]>div:nth-child(1)>div:nth-child(2) {
+    background-color: #1a1b41 !important;
+}
+
+div[data-testid="stSlider"] [aria-valuemax] {
+    background-color: #1a1b41 !important;
+    border-color: #1a1b41 !important;
+}
+
+/* Tooltip and value label for slider */
+div[role="slider"] {
+    background-color: #1a1b41 !important;
+}
+
+/* ======================================= */
+/* SHORTEN SELECTBOX                       */
+/* ======================================= */
+div[data-testid="stSelectbox"]>div {
+    min-height: 34px !important;
+}
+
+/* Navy Card for Evaluations (Border only) */
+.navy-card {
+    background-color: transparent !important;
+    color: #1a1b41 !important;
+    padding: 12px 16px !important;
+    border: 1px solid #1a1b41 !important;
+    border-radius: 8px !important;
+    margin-bottom: 20px !important;
+}
+
+.navy-card h3 {
+    color: #1a1b41 !important;
+    margin: 0 !important;
+}
+
+/* Style File Uploader Browse Button specifically */
+[data-testid="stFileUploaderBrowseBtn"],
+[data-testid="stFileUploaderBrowseBtn"] div,
+[data-testid="stFileUploaderBrowseBtn"] span {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 4px !important;
+}
+
+/* Make Alerts (st.success, st.error) Shorter and Narrower */
+div[data-testid="stNotification"] {
+    padding: 0px !important;
+    min-height: 24px !important;
+    width: 400px !important;
+    max-width: 400px !important;
+    margin-left: 0 !important;
+}
+
+div[data-testid="stNotification"] div[role="alert"] {
+    padding: 2px 10px !important;
+    width: 400px !important;
+    max-width: 400px !important;
+}
+
+/* Hide the large icon to save space and match user request */
+div[data-testid="stNotification"] div[data-testid="stNotificationIcon"] {
+    display: none !important;
+}
+
+div[data-testid="stNotification"] p {
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    margin-bottom: 0 !important;
+    white-space: nowrap !important;
+}
+
+/* ======================================= */
+/* DATA TABLES - Black Headers & Clean Rows */
+/* ======================================= */
+
+/* Targeted styling for st.table (static tables) */
+div[data-testid="stTable"] {
+    overflow-x: auto !important;
+    display: block !important;
+    width: 100% !important;
+}
+
+[data-testid="stTable"] table {
+    width: auto !important;
+    min-width: 100% !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    border: none !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* Hide the index column in st.table */
+[data-testid="stTable"] table thead tr th:first-child,
+[data-testid="stTable"] table tbody tr th,
+[data-testid="stTable"] table tbody tr td:first-child:empty {
+    display: none !important;
+}
+
+/* Header Styling - Black background, white text, no wrapping */
+[data-testid="stTable"] thead tr th {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    padding: 12px 16px !important;
+    border: none !important;
+    text-align: left !important;
+    white-space: nowrap !important;
+    font-weight: 600 !important;
+    font-size: 12px !important;
+}
+
+/* Ensure white text for the divs inside headers if Streamlit wraps them */
+[data-testid="stTable"] thead tr th div,
+[data-testid="stTable"] thead tr th p,
+[data-testid="stTable"] thead tr th span {
+    color: #ffffff !important;
+    text-align: left !important;
+}
+
+/* Cell Styling - Horizontal dividers only, remove vertical lines */
+[data-testid="stTable"] tbody tr td {
+    padding: 12px 16px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+    color: #374151 !important;
+    font-size: 11px !important;
+    /* Aggressive word splitting prevention */
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
+    text-align: left !important;
+    vertical-align: middle !important;
+}
+
+/* Alternating row colors for better readability */
+[data-testid="stTable"] tbody tr:nth-child(even) {
+    background-color: #fafafa !important;
+}
+
+/* Remove borders from st.dataframe containers too */
+[data-testid="stDataFrameResizable"],
+div[data-testid="stDataFrame"] {
+    border: none !important;
+}
+
+
+.stDataFrame tbody tr:nth-child(even) {
+    background-color: #fafafa !important;
+}
+
+/* ======================================= */
+/* METRIC CARDS                            */
+/* ======================================= */
+.metric-card {
+    background: white;
+    padding: 20px;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
+    border-top: 3px solid #CC0000;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.metric-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.metric-value {
+    font-family: 'Inter', sans-serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: #1a1a1a;
+    line-height: 1;
+}
+
+/* ======================================= */
+/* GENERAL CARDS                           */
+/* ======================================= */
+.card {
+    background: white;
+    padding: 20px 24px 24px 24px;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    margin-bottom: 20px;
+}
+
+.card h5 {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* ======================================= */
+/* EVAL CARD                               */
+/* ======================================= */
+.eval-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #CC0000;
+    border-radius: 4px;
+    padding: 24px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+    margin-bottom: 24px;
+}
+
+.eval-header {
+    font-family: 'Inter', sans-serif;
+    color: #1a1a1a;
+    font-size: 1.4rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* ======================================= */
+/* RISK BADGES                             */
+/* ======================================= */
+.risk-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.risk-critical {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.risk-high {
+    background-color: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+}
+
+.risk-medium {
+    background-color: #fefce8;
+    color: #854d0e;
+    border: 1px solid #fef08a;
+}
+
+.risk-low {
+    background-color: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+/* ======================================= */
+/* iLINK LOGO                              */
+/* ======================================= */
+.ilink-simple-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ilink-text-simple {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: 0.02em;
+    line-height: 1;
+}
+
+.ilink-text-simple .digital {
+    color: #CC0000;
+    margin-left: 4px;
+    font-weight: 400;
+}
+
+/* ======================================= */
+/* FOOTER                                  */
+/* ======================================= */
+.ilink-footer {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+    padding: 8px 0;
+    font-size: 12px;
+    color: #6b7280;
+    background-color: #ffffff;
+    border-top: 2px solid #CC0000;
+    z-index: 9999;
+}
+
+/* ======================================= */
+/* HIDE STREAMLIT CHROME                   */
+/* ======================================= */
+footer {
+    visibility: hidden;
+}
+
+/* Streamlit header bar - keep visible for sidebar toggle */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    backdrop-filter: none !important;
+}
