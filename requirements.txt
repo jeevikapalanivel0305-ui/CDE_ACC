@@ -5,3 +5,4 @@ requests
 pyodbc
 google-genai
 python-dotenv
+openpyxl
