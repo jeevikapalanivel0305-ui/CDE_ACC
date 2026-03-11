@@ -12,34 +12,34 @@ from pathlib import Path
 dotenv_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-def get_gemini_client(direct_key=None):
-    """Initialize Gemini client with API key from environment, secrets, or direct input"""
+def get_ai_client(direct_key=None):
+    """Initialize AI client with API key from environment, secrets, or direct input"""
     try:
         api_key = direct_key
         
         # Priority 1: Environment Variable (.env or system)
         if not api_key:
-            api_key = os.getenv("GEMINI_API_KEY")
+            api_key = os.getenv("AI_API_KEY")
         
         # Priority 2: Manual .env parse fallback (BOM-aware)
-        if (not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE") and dotenv_path.exists():
+        if (not api_key or api_key == "YOUR_API_KEY_HERE") and dotenv_path.exists():
             try:
                 # utf-8-sig handles the Byte Order Mark (BOM) automatically
                 content = dotenv_path.read_text(encoding="utf-8-sig")
                 for line in content.splitlines():
-                    if 'GEMINI_API_KEY=' in line:
+                    if 'AI_API_KEY=' in line:
                         api_key = line.split('=', 1)[1].strip().strip('"').strip("'")
-                        os.environ["GEMINI_API_KEY"] = api_key 
+                        os.environ["AI_API_KEY"] = api_key 
                         break
             except Exception:
                 pass
 
         # Priority 3: Streamlit Secrets
-        if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
-            api_key = st.secrets.get("GEMINI_API_KEY")
+        if not api_key or api_key == "YOUR_API_KEY_HERE":
+            api_key = st.secrets.get("AI_API_KEY")
             
-        if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
-            st.error(f"⚠️ GEMINI_API_KEY not found in environment or secrets.")
+        if not api_key or api_key == "YOUR_API_KEY_HERE":
+            st.error(f"⚠️ AI_API_KEY not found in environment or secrets.")
             st.info(f"💡 The app tried to load from: `{dotenv_path.absolute()}`")
             if dotenv_path.exists():
                 st.write("✅ .env file exists.")
@@ -53,7 +53,7 @@ def get_gemini_client(direct_key=None):
             
         return genai.Client(api_key=api_key)
     except Exception as e:
-        st.error(f"Error initializing Gemini client: {str(e)}")
+        st.error(f"Error initializing AI client: {str(e)}")
         return None
 
 # ============================================
@@ -61,11 +61,11 @@ def get_gemini_client(direct_key=None):
 # ============================================
 
 def generate_cde_suggestions(business_requirement, industry="General", file_columns=None, direct_key=None):
-    """Generate CDE suggestions using Gemini based on business requirement, industry, and optional file schema"""
-    client = get_gemini_client(direct_key=direct_key)
+    """Generate CDE suggestions using AI based on business requirement, industry, and optional file schema"""
+    client = get_ai_client(direct_key=direct_key)
     
     if not client:
-        st.warning("⚠️ Gemini API key not configured. Please add your GEMINI_API_KEY to .env or .streamlit/secrets.toml")
+        st.warning("⚠️ API key not configured. Please add your AI_API_KEY to .env or .streamlit/secrets.toml")
         return []
     
     # Construct Contextual Prompt
@@ -125,7 +125,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
 
 def recommend_cdes_from_columns(table_name, columns, industry="General"):
     """Specifically recommend CDEs based on a table schema (columns)"""
-    client = get_gemini_client()
+    client = get_ai_client()
     if not client: return []
     
     prompt = f"""You are a data governance expert in the {industry} industry. 
@@ -137,7 +137,7 @@ def recommend_cdes_from_columns(table_name, columns, industry="General"):
     try:
         # Check if client exists
         if not client:
-            st.error("❌ Gemini Client not initialized. Please check your API key.")
+            st.error("❌ AI Client not initialized. Please check your API key.")
             return []
             
         response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
@@ -241,109 +241,110 @@ def render_ai_recommend():
             st.session_state.connector_creds['fabric_database'] = f_db
 
         # Configuration Section
-        st.write("---")
-        auth_mode = st.radio("Authentication Mode", 
-                            ["Interactive Login (Standard)", "Email & Password (AAD)", "Service Principal (Automation/Cloud)"], 
-                            index=1, horizontal=True)
-        
-        creds = st.session_state.connector_creds
-        
-        st.caption("ℹ️ **Technical Note**: Fabric SQL Endpoints use the SQL Server protocol, which is why the 'SQL Server ODBC Driver' is used as a translator.")
-
-        if auth_mode == "Service Principal (Automation/Cloud)":
-            st.info("💡 Service Principal is required for Streamlit Cloud automation.")
-            col1, col2, col3 = st.columns(3)
-            with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant_fl")
-            with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
-            with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
-        elif auth_mode == "Email & Password (AAD)":
-            st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Interactive Login**.")
-            col1, col2 = st.columns(2)
-            with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
-            with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
-        else:
-            st.info("💡 **Failsafe Mode**: If popups don't appear, use the 'Device Code' buttons below.")
-            creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
+        # Authentication Expander
+        with st.expander("🔐 Authentication", expanded=True):
+            auth_mode = st.radio("Authentication Mode", 
+                                ["Interactive Login (Standard)", "Email & Password (AAD)", "Service Principal (Automation/Cloud)"], 
+                                index=1, horizontal=True, key="ai_auth_mode_radio")
             
-            with st.expander("⚙️ Advanced Authentication Settings"):
-                st.caption("Use these if your organization's IT policy blocks the default login app.")
-                # Azure PowerShell Client ID is often more widely accepted than the generic CLI one
-                creds['fabric_custom_client_id'] = st.text_input("Custom Client ID (Optional)", 
-                                                             value=creds.get('fabric_custom_client_id', '1950a258-227b-4e31-a9cf-717495945fc2'), 
-                                                             help="The App Registration Client ID to use for login.",
-                                                             key="ai_f_custom_cid")
-                creds['fabric_tenant_id'] = st.text_input("Tenant ID (Optional)", 
-                                                      value=creds.get('fabric_tenant_id', ''), 
-                                                      help="Required if your account is restricted to a specific directory.",
-                                                      key="ai_f_tenant_fl_adv")
+            creds = st.session_state.connector_creds
+            
+            st.caption("ℹ️ **Technical Note**: Fabric SQL Endpoints use the SQL Server protocol, which is why the 'SQL Server ODBC Driver' is used as a translator.")
 
-        # --- Device Code Flow Step-by-Step UI ---
-        if auth_mode == "Interactive Login (Standard)":
-            col_code, col_verify = st.columns(2)
-            with col_code:
-                if st.button("🔑 1. Get Login Code", use_container_width=True):
-                    try:
-                        import msal
-                        # Priority: User Custom ID > Azure PowerShell ID
-                        client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
-                        # Use provided Tenant ID OR name if available, else default to 'organizations'
-                        tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
-                        authority = f"https://login.microsoftonline.com/{tenant}"
-                        
-                        app = msal.PublicClientApplication(client_id, authority=authority)
-                        # FIX: Use single slash and ensure it's v2.0 compatible
-                        scopes = ["https://database.windows.net/.default"]
-                        flow = app.initiate_device_flow(scopes=scopes)
-                        if "user_code" in flow:
-                            st.session_state.ai_f_flow = flow
-                            st.rerun()
+            if auth_mode == "Service Principal (Automation/Cloud)":
+                st.info("💡 Service Principal is required for Streamlit Cloud automation.")
+                col1, col2, col3 = st.columns(3)
+                with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant_fl")
+                with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
+                with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
+            elif auth_mode == "Email & Password (AAD)":
+                st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Interactive Login**.")
+                col1, col2 = st.columns(2)
+                with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
+                with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
+            else:
+                st.info("💡 **Failsafe Mode**: If popups don't appear, use the 'Device Code' buttons below.")
+                creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
+                
+                with st.expander("⚙️ Advanced Authentication Settings"):
+                    st.caption("Use these if your organization's IT policy blocks the default login app.")
+                    # Azure PowerShell Client ID is often more widely accepted than the generic CLI one
+                    creds['fabric_custom_client_id'] = st.text_input("Custom Client ID (Optional)", 
+                                                                 value=creds.get('fabric_custom_client_id', '1950a258-227b-4e31-a9cf-717495945fc2'), 
+                                                                 help="The App Registration Client ID to use for login.",
+                                                                 key="ai_f_custom_cid")
+                    creds['fabric_tenant_id'] = st.text_input("Tenant ID (Optional)", 
+                                                          value=creds.get('fabric_tenant_id', ''), 
+                                                          help="Required if your account is restricted to a specific directory.",
+                                                          key="ai_f_tenant_fl_adv")
+
+            # --- Device Code Flow Step-by-Step UI ---
+            if auth_mode == "Interactive Login (Standard)":
+                col_code, col_verify = st.columns(2)
+                with col_code:
+                    if st.button("🔑 1. Get Login Code", use_container_width=True):
+                        try:
+                            import msal
+                            # Priority: User Custom ID > Azure PowerShell ID
+                            client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
+                            # Use provided Tenant ID OR name if available, else default to 'organizations'
+                            tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
+                            authority = f"https://login.microsoftonline.com/{tenant}"
+                            
+                            app = msal.PublicClientApplication(client_id, authority=authority)
+                            # FIX: Use single slash and ensure it's v2.0 compatible
+                            scopes = ["https://database.windows.net/.default"]
+                            flow = app.initiate_device_flow(scopes=scopes)
+                            if "user_code" in flow:
+                                st.session_state.ai_f_flow = flow
+                                st.rerun()
+                            else:
+                                st.error(f"Flow error: {flow.get('error_description', 'Your Tenant might be blocking this App ID. Please provide a Custom Client ID in Advanced Settings.')}")
+                        except Exception as e:
+                            st.error(f"Init error: {str(e)}")
+                
+                with col_verify:
+                    if st.button("✅ 2. Verify & Connect", type="primary", use_container_width=True):
+                        if 'ai_f_flow' not in st.session_state:
+                            st.warning("Please click 'Get Login Code' first.")
                         else:
-                            st.error(f"Flow error: {flow.get('error_description', 'Your Tenant might be blocking this App ID. Please provide a Custom Client ID in Advanced Settings.')}")
-                    except Exception as e:
-                        st.error(f"Init error: {str(e)}")
-            
-            with col_verify:
-                if st.button("✅ 2. Verify & Connect", type="primary", use_container_width=True):
-                    if 'ai_f_flow' not in st.session_state:
-                        st.warning("Please click 'Get Login Code' first.")
-                    else:
-                        with st.spinner("Verifying your login..."):
-                            try:
-                                import msal
-                                from backend.fabric_connector import FabricConnector
-                                client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
-                                tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
-                                app = msal.PublicClientApplication(client_id, authority=f"https://login.microsoftonline.com/{tenant}")
-                                result = app.acquire_token_by_device_flow(st.session_state.ai_f_flow)
-                                
-                                if "access_token" in result:
-                                    st.session_state.ai_f_token = result["access_token"]
-                                    connector = FabricConnector("", "", "")
-                                    tables = connector.list_tables(f_sql, database_name=f_db, access_token=st.session_state.ai_f_token)
-                                    st.session_state.ai_fabric_tables = tables
-                                    st.session_state.ai_fabric_error = None
-                                    del st.session_state.ai_f_flow
-                                    st.success(f"Connected to '{f_db or 'Fabric'}'! Shared {len(tables)} tables.")
-                                    st.rerun()
-                                else:
-                                    st.error("Login not verified yet. Please enter the code in your browser first.")
-                            except Exception as e:
-                                st.error(f"Connect error: {str(e)}")
+                            with st.spinner("Verifying your login..."):
+                                try:
+                                    import msal
+                                    from backend.fabric_connector import FabricConnector
+                                    client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
+                                    tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
+                                    app = msal.PublicClientApplication(client_id, authority=f"https://login.microsoftonline.com/{tenant}")
+                                    result = app.acquire_token_by_device_flow(st.session_state.ai_f_flow)
+                                    
+                                    if "access_token" in result:
+                                        st.session_state.ai_f_token = result["access_token"]
+                                        connector = FabricConnector("", "", "")
+                                        tables = connector.list_tables(f_sql, database_name=f_db, access_token=st.session_state.ai_f_token)
+                                        st.session_state.ai_fabric_tables = tables
+                                        st.session_state.ai_fabric_error = None
+                                        del st.session_state.ai_f_flow
+                                        st.success(f"Connected to '{f_db or 'Fabric'}'! Shared {len(tables)} tables.")
+                                        st.rerun()
+                                    else:
+                                        st.error("Login not verified yet. Please enter the code in your browser first.")
+                                except Exception as e:
+                                    st.error(f"Connect error: {str(e)}")
 
-        # Display Code if flow active
-        if 'ai_f_flow' in st.session_state and auth_mode == "Interactive Login (Standard)":
-            flow = st.session_state.ai_f_flow
-            st.markdown(f"""
-            <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b;">
-                <p><b>Login Required</b></p>
-                <p>1. Go to: <a href="{flow['verification_uri']}" target="_blank">{flow['verification_uri']}</a></p>
-                <p>2. Enter Code: <span style="font-family: monospace; font-size: 1.2em; color: #ff4b4b;">{flow['user_code']}</span></p>
-                <p style="font-size: 0.8em; color: #666;">Waiting for you to authorize in the browser...</p>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Cancel Login"):
-                del st.session_state.ai_f_flow
-                st.rerun()
+            # Display Code if flow active
+            if 'ai_f_flow' in st.session_state and auth_mode == "Interactive Login (Standard)":
+                flow = st.session_state.ai_f_flow
+                st.markdown(f"""
+                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b;">
+                    <p><b>Login Required</b></p>
+                    <p>1. Go to: <a href="{flow['verification_uri']}" target="_blank">{flow['verification_uri']}</a></p>
+                    <p>2. Enter Code: <span style="font-family: monospace; font-size: 1.2em; color: #ff4b4b;">{flow['user_code']}</span></p>
+                    <p style="font-size: 0.8em; color: #666;">Waiting for you to authorize in the browser...</p>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Cancel Login"):
+                    del st.session_state.ai_f_flow
+                    st.rerun()
 
         # Traditional Discover Button (for Service Principal / AAD Pwd)
         if auth_mode != "Interactive Login (Standard)":
@@ -428,26 +429,26 @@ def render_ai_recommend():
                               placeholder="Example: We need to comply with GDPR for our European customer data...",
                               key="ai_requirement")
     
-    with st.expander("🔑 Gemini API Settings (Failsafe)"):
-        direct_key = st.text_input("Direct Gemini API Key", 
+    with st.expander("🔑 API Settings (Failsafe)"):
+        direct_key = st.text_input("Direct API Key", 
                                   value="", 
                                   type="password", 
                                   help="Paste your new API key here if the .env file is not working.",
-                                  key="ai_direct_gemini_key")
+                                  key="ai_direct_api_key")
         
         # Display masked existing key for verification
-        current_client = get_gemini_client(direct_key=direct_key)
+        current_client = get_ai_client(direct_key=direct_key)
         if current_client:
             # We don't have a direct way to get the key back from the client easily in some versions, 
             # so we check the env/direct_key
-            check_key = direct_key or os.getenv("GEMINI_API_KEY")
+            check_key = direct_key or os.getenv("AI_API_KEY")
             if check_key and len(check_key) > 8:
                 masked = f"{check_key[:4]}...{check_key[-4:]}"
                 st.success(f"✅ Active Key: `{masked}`")
             else:
                 st.warning("⚠️ Key loaded but seems too short.")
         else:
-            st.error("❌ No valid Gemini API key loaded.")
+            st.error("❌ No valid API key loaded.")
 
     if st.button("Analyze & Recommend CDEs", type="primary"):
         cols_to_analyze = file_columns
@@ -544,7 +545,7 @@ def render_ai_recommend():
                                 "securityRisk": 3,
                                 "systemComplexity": 3,
                                 "recoveryDifficulty": 3,
-                                "notes": f"Recommended by Gemini AI from {source_system}. Context: {requirement[:50]}..."
+                                "notes": f"Recommended by AI from {source_system}. Context: {requirement[:50]}..."
                             }
                             st.session_state.cdes.append(new_cde)
                             time.sleep(0.5)

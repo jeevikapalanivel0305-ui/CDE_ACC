@@ -2,7 +2,7 @@
 CDE Risk Assessment Platform
 Critical Data Element Governance Platform
 Powered by iLink Digital
-With AI-Powered Action Suggestions using Gemini
+With AI-Powered Action Suggestions
 """
 
 import streamlit as st
@@ -27,7 +27,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from google import genai
 from backend.purview_connector import PurviewConnector
 from backend.fabric_connector import FabricConnector
-from backend.ai_recommender import render_ai_recommend, generate_cde_suggestions, get_gemini_client
+from backend.ai_recommender import render_ai_recommend, generate_cde_suggestions, get_ai_client
 import requests
 import time
 import base64
@@ -107,8 +107,8 @@ INITIAL_ACTIONS = [
 
 
 def generate_action_suggestions(action_name, cde_info):
-    """Generate action suggestions and priority using Gemini"""
-    client = get_gemini_client()
+    """Generate action suggestions and priority using AI"""
+    client = get_ai_client()
     if not client:
         return {
             "description": "Please enter action description manually",
@@ -153,7 +153,7 @@ Respond ONLY in this JSON format (no markdown, no code blocks):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt
         )
         
