@@ -222,6 +222,18 @@ def render_ai_recommend():
         else:
             st.info("💡 **Failsafe Mode**: If popups don't appear, use the 'Device Code' buttons below.")
             creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
+            
+            with st.expander("⚙️ Advanced Authentication Settings"):
+                st.caption("Use these if your organization's IT policy blocks the default login app.")
+                # Azure PowerShell Client ID is often more widely accepted than the generic CLI one
+                creds['fabric_custom_client_id'] = st.text_input("Custom Client ID (Optional)", 
+                                                             value=creds.get('fabric_custom_client_id', '1950a258-227b-4e31-a9cf-717495945fc2'), 
+                                                             help="The App Registration Client ID to use for login.",
+                                                             key="ai_f_custom_cid")
+                creds['fabric_tenant_id'] = st.text_input("Tenant ID (Optional)", 
+                                                      value=creds.get('fabric_tenant_id', ''), 
+                                                      help="Required if your account is restricted to a specific directory.",
+                                                      key="ai_f_tenant_fl_adv")
 
         # --- Device Code Flow Step-by-Step UI ---
         if auth_mode == "Interactive Login (Standard)":
@@ -230,8 +242,8 @@ def render_ai_recommend():
                 if st.button("🔑 1. Get Login Code", use_container_width=True):
                     try:
                         import msal
-                        client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554" 
-                        # Use provided Tenant ID if available, else default to 'organizations'
+                        # Priority: User Custom ID > Azure PowerShell ID
+                        client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
                         tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
                         authority = f"https://login.microsoftonline.com/{tenant}"
                         
@@ -241,7 +253,7 @@ def render_ai_recommend():
                             st.session_state.ai_f_flow = flow
                             st.rerun()
                         else:
-                            st.error(f"Flow error: {flow.get('error_description', 'No tenant found. Please provide a Tenant ID below if needed.')}")
+                            st.error(f"Flow error: {flow.get('error_description', 'Your Tenant might be blocking this App ID. Please provide a Custom Client ID in Advanced Settings.')}")
                     except Exception as e:
                         st.error(f"Init error: {str(e)}")
             
@@ -254,7 +266,7 @@ def render_ai_recommend():
                             try:
                                 import msal
                                 from backend.fabric_connector import FabricConnector
-                                client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554"
+                                client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
                                 tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
                                 app = msal.PublicClientApplication(client_id, authority=f"https://login.microsoftonline.com/{tenant}")
                                 result = app.acquire_token_by_device_flow(st.session_state.ai_f_flow)
