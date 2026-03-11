@@ -200,15 +200,23 @@ def render_ai_recommend():
 
         # Automatic Discovery Trigger
         if f_sql and not st.session_state.get('ai_fabric_tables') and not st.session_state.get('ai_fabric_error'):
-            with st.spinner("Connecting to Fabric to discover tables..."):
-                try:
-                    from backend.fabric_connector import FabricConnector
-                    creds = st.session_state.connector_creds
-                    
-                    # Validate credentials presence
-                    if not creds.get('fabric_tenant_id') or not creds.get('fabric_client_id'):
-                        st.session_state.ai_fabric_error = "Missing Fabric Credentials. Please configure them in the 'New Connection' section first."
-                    else:
+            # Detect if we have enough credentials in session state
+            creds = st.session_state.connector_creds
+            has_creds = creds.get('fabric_tenant_id') and creds.get('fabric_client_id') and creds.get('fabric_client_secret')
+            
+            if not has_creds:
+                st.info("💡 To automate table discovery without popups (especially on Streamlit Cloud), please provide Service Principal credentials.")
+                with st.expander("🔑 Automation Settings (Service Principal)"):
+                    creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant")
+                    creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client")
+                    creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret")
+                    if st.button("Save & Discover"):
+                        st.session_state.connector_creds = creds
+                        st.rerun()
+            else:
+                with st.spinner("Connecting to Fabric to discover tables..."):
+                    try:
+                        from backend.fabric_connector import FabricConnector
                         connector = FabricConnector(
                             creds.get('fabric_tenant_id', ''), 
                             creds.get('fabric_client_id', ''), 
@@ -219,16 +227,28 @@ def render_ai_recommend():
                         if not tables:
                             st.session_state.ai_fabric_error = "No tables found in this workspace."
                         st.rerun()
-                except Exception as e:
-                    st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
-                    st.rerun()
+                    except Exception as e:
+                        st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
+                        st.rerun()
 
         # Display Error if any
         if st.session_state.get('ai_fabric_error'):
             st.error(st.session_state.ai_fabric_error)
-            if st.button("Retry Discovery"):
+            # If error is about credentials, show the expander anyway
+            if "Credentials" in st.session_state.ai_fabric_error or "failed" in st.session_state.ai_fabric_error.lower():
+                with st.expander("Update Automation Settings"):
+                    creds = st.session_state.connector_creds
+                    creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant_err")
+                    creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_err")
+                    creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_err")
+                    if st.button("Update & Retry"):
+                        st.session_state.connector_creds = creds
+                        st.session_state.ai_fabric_error = None
+                        st.session_state.ai_fabric_tables = []
+                        st.rerun()
+            
+            if st.button("Clear Error"):
                 st.session_state.ai_fabric_error = None
-                st.session_state.ai_fabric_tables = []
                 st.rerun()
 
         # Conditional Display: Dropdown vs Text Input
