@@ -17,11 +17,21 @@ def get_gemini_client():
     try:
         # Priority 1: Environment Variable (.env or system)
         api_key = os.getenv("GEMINI_API_KEY")
-        # st.write(f"DEBUG: Key from env: {api_key[:5] if api_key else 'None'}...")
         
-        # Priority 2: Streamlit Secrets (fallback if env not set OR is the placeholder)
+        # Priority 2: Manual .env parse fallback
+        if (not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE") and dotenv_path.exists():
+            try:
+                content = dotenv_path.read_text()
+                for line in content.splitlines():
+                    if 'GEMINI_API_KEY' in line:
+                        api_key = line.split('=')[1].strip().strip('"').strip("'")
+                        os.environ["GEMINI_API_KEY"] = api_key # Put it back in env for consistency
+                        break
+            except Exception:
+                pass
+
+        # Priority 3: Streamlit Secrets (fallback if env not set OR is the placeholder)
         if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
-            # st.write("DEBUG: Falling back to st.secrets")
             api_key = st.secrets.get("GEMINI_API_KEY")
             
         if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
@@ -29,6 +39,13 @@ def get_gemini_client():
             st.info(f"💡 The app tried to load from: `{dotenv_path.absolute()}`")
             if dotenv_path.exists():
                 st.write("✅ .env file exists at that location.")
+                st.write(f"ℹ️ File size: {dotenv_path.stat().st_size} bytes")
+                # Test for BOM or encoding issues
+                try:
+                    with open(dotenv_path, 'rb') as f:
+                        header = f.read(10)
+                        st.write(f"🔍 File header bytes: `{header.hex(' ')}`")
+                except: pass
             else:
                 st.write("❌ .env file NOT found at that location.")
             return None
