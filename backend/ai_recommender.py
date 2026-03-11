@@ -186,17 +186,28 @@ def render_ai_recommend():
                 st.error(f"Error reading file: {str(e)}")
     else:
         # Fabric Connector UI - Flexible Auth Roles
-        f_sql = st.text_input("SQL Endpoint / Connection String", 
-                             value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
-                             type="password",
-                             key="ai_f_sql_input",
-                             placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
+        col_sql, col_db = st.columns([2, 1])
+        with col_sql:
+            f_sql = st.text_input("SQL Endpoint / Connection String", 
+                                 value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
+                                 type="password",
+                                 key="ai_f_sql_input",
+                                 placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
+        with col_db:
+            f_db = st.text_input("Warehouse / Database Name", 
+                                value=st.session_state.connector_creds.get('fabric_database', ''), 
+                                placeholder="e.g. w1",
+                                key="ai_f_db_input")
         
-        # Reset discovery when endpoint changes
-        if 'prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql:
+        # Reset discovery when endpoint or database changes
+        if ('prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql or 
+            'prev_f_db' not in st.session_state or st.session_state.prev_f_db != f_db):
             st.session_state.ai_fabric_tables = []
             st.session_state.prev_f_sql = f_sql
+            st.session_state.prev_f_db = f_db
             st.session_state.ai_fabric_error = None
+            st.session_state.connector_creds['fabric_sql_endpoint'] = f_sql
+            st.session_state.connector_creds['fabric_database'] = f_db
 
         # Configuration Section
         st.write("---")
@@ -277,11 +288,11 @@ def render_ai_recommend():
                                 if "access_token" in result:
                                     st.session_state.ai_f_token = result["access_token"]
                                     connector = FabricConnector("", "", "")
-                                    tables = connector.list_tables(f_sql, access_token=st.session_state.ai_f_token)
+                                    tables = connector.list_tables(f_sql, database_name=f_db, access_token=st.session_state.ai_f_token)
                                     st.session_state.ai_fabric_tables = tables
                                     st.session_state.ai_fabric_error = None
                                     del st.session_state.ai_f_flow
-                                    st.success(f"Connected! Shared {len(tables)} tables.")
+                                    st.success(f"Connected to '{f_db or 'Fabric'}'! Shared {len(tables)} tables.")
                                     st.rerun()
                                 else:
                                     st.error("Login not verified yet. Please enter the code in your browser first.")
@@ -321,12 +332,12 @@ def render_ai_recommend():
                                 t_id, c_id, c_sec = "", creds.get('fabric_email', ''), f"AAD_PWD:{creds.get('fabric_password', '')}"
                             
                             connector = FabricConnector(t_id, c_id, c_sec)
-                            tables = connector.list_tables(f_sql) 
+                            tables = connector.list_tables(f_sql, database_name=f_db) 
                             st.session_state.ai_fabric_tables = tables
                             if not tables:
-                                st.session_state.ai_fabric_error = "No tables found. Check permissions."
+                                st.session_state.ai_fabric_error = f"No tables found in '{f_db or 'Fabric'}'. Check permissions."
                             else:
-                                st.success(f"Successfully discovered {len(tables)} tables!")
+                                st.success(f"Successfully discovered {len(tables)} tables in '{f_db}'!")
                                 st.rerun()
                         except Exception as e:
                             st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
@@ -371,7 +382,7 @@ def render_ai_recommend():
                     creds = st.session_state.connector_creds
                     connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
                     token = st.session_state.get('ai_f_token')
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, access_token=token)
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db, access_token=token)
                     if schema:
                         st.session_state.ai_discovered_cols = [c['name'] for c in schema]
                         st.session_state.prev_ai_f_tab = fabric_table
