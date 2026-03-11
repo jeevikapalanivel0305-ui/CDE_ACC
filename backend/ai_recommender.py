@@ -180,68 +180,68 @@ def render_ai_recommend():
     st.markdown('<h3 style="margin-bottom: 0px;">AI CDE Recommender</h3>', unsafe_allow_html=True)
     st.markdown('<div style="color: #666; margin-bottom: 20px;">Identify Critical Data Elements from your data source using AI analysis.</div>', unsafe_allow_html=True)
     
-    # --- Core Connection Info (Visible on Surface) ---
-    col_ind, col_conn = st.columns(2)
-    
-    with col_ind:
-        st.markdown("**1. Industry Domain**")
-        selected_industry = st.selectbox("Industry", 
-                                       ["General", "Finance / Banking", "Healthcare", "Retail / E-Commerce", "Manufacturing", "Energy / Utilities", "Insurance"], 
-                                       key="ai_selected_industry")
+    # --- Single Minimal Expander (Arrow only) ---
+    with st.expander("🔽", expanded=False):
+        col_ind, col_conn = st.columns(2)
         
-    with col_conn:
-        st.markdown("**2. Data Source**")
-        connector_type = st.selectbox("Connector", ["Excel", "Microsoft Fabric"], key="ai_connector_type")
-        
-        # Reset discovery when connector changes
-        if 'prev_ai_connector' not in st.session_state or st.session_state.prev_ai_connector != connector_type:
-            st.session_state.ai_discovered_cols = []
-            st.session_state.prev_ai_connector = connector_type
+        with col_ind:
+            st.markdown("**1. Industry Domain**")
+            selected_industry = st.selectbox("Industry", 
+                                           ["General", "Finance / Banking", "Healthcare", "Retail / E-Commerce", "Manufacturing", "Energy / Utilities", "Insurance"], 
+                                           key="ai_selected_industry")
+            
+        with col_conn:
+            st.markdown("**2. Data Source**")
+            connector_type = st.selectbox("Connector", ["Excel", "Microsoft Fabric"], key="ai_connector_type")
+            
+            # Reset discovery when connector changes
+            if 'prev_ai_connector' not in st.session_state or st.session_state.prev_ai_connector != connector_type:
+                st.session_state.ai_discovered_cols = []
+                st.session_state.prev_ai_connector = connector_type
 
-    # Connector specific inputs
-    file_columns = []
-    fabric_table = None
-    
-    if connector_type == "Excel":
-        uploaded_file = st.file_uploader("Upload Excel / CSV file", type=["csv", "xlsx"])
-        if uploaded_file:
-            st.session_state.ai_excel_filename = uploaded_file.name
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    df_preview = pd.read_csv(uploaded_file, nrows=5)
-                else:
-                    df_preview = pd.read_excel(uploaded_file, nrows=5)
-                file_columns = df_preview.columns.tolist()
-                st.session_state.ai_discovered_cols = file_columns
-                st.success(f"Loaded {len(file_columns)} columns.")
-            except Exception as e:
-                st.error(f"Error reading file: {str(e)}")
-    else:
-        # Fabric Connector UI - Core Fields
-        col_sql, col_db = st.columns([2, 1])
-        with col_sql:
-            f_sql = st.text_input("SQL Endpoint / Connection String", 
-                                 value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
-                                 type="password",
-                                 key="ai_f_sql_input",
-                                 placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
-        with col_db:
-            f_db = st.text_input("Warehouse / Database Name", 
-                                value=st.session_state.connector_creds.get('fabric_database', ''), 
-                                placeholder="e.g. w1",
-                                key="ai_f_db_input")
+        # Connector specific inputs
+        file_columns = []
+        fabric_table = None
         
-        # Reset strings for change detection
-        if ('prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql or 
-            'prev_f_db' not in st.session_state or st.session_state.prev_f_db != f_db):
-            st.session_state.ai_fabric_tables = []
-            st.session_state.prev_f_sql = f_sql
-            st.session_state.prev_f_db = f_db
-            st.session_state.connector_creds['fabric_sql_endpoint'] = f_sql
-            st.session_state.connector_creds['fabric_database'] = f_db
+        if connector_type == "Excel":
+            uploaded_file = st.file_uploader("Upload Excel / CSV file", type=["csv", "xlsx"])
+            if uploaded_file:
+                st.session_state.ai_excel_filename = uploaded_file.name
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df_preview = pd.read_csv(uploaded_file, nrows=5)
+                    else:
+                        df_preview = pd.read_excel(uploaded_file, nrows=5)
+                    file_columns = df_preview.columns.tolist()
+                    st.session_state.ai_discovered_cols = file_columns
+                    st.success(f"Loaded {len(file_columns)} columns.")
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+        else:
+            # Fabric Connector UI - Core Fields
+            col_sql, col_db = st.columns([2, 1])
+            with col_sql:
+                f_sql = st.text_input("SQL Endpoint / Connection String", 
+                                     value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
+                                     type="password",
+                                     key="ai_f_sql_input",
+                                     placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
+            with col_db:
+                f_db = st.text_input("Warehouse / Database Name", 
+                                    value=st.session_state.connector_creds.get('fabric_database', ''), 
+                                    placeholder="e.g. w1",
+                                    key="ai_f_db_input")
+            
+            # Reset strings for change detection
+            if ('prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql or 
+                'prev_f_db' not in st.session_state or st.session_state.prev_f_db != f_db):
+                st.session_state.ai_fabric_tables = []
+                st.session_state.prev_f_sql = f_sql
+                st.session_state.prev_f_db = f_db
+                st.session_state.connector_creds['fabric_sql_endpoint'] = f_sql
+                st.session_state.connector_creds['fabric_database'] = f_db
 
-        # --- Minimal Setup & Authentication Expander (Arrow only) ---
-        with st.expander("🔽 Connection & Setup Details"):
+            # --- Internal Setup & Authentication Details ---
             auth_mode = st.radio("Authentication Mode", 
                                 ["Interactive Login (Standard)", "Email & Password (AAD)", "Service Principal (Automation/Cloud)"], 
                                 index=1, horizontal=True, key="ai_auth_mode_radio")
@@ -371,18 +371,18 @@ def render_ai_recommend():
                         st.session_state.prev_ai_f_tab = fabric_table
                 except Exception: pass
 
+            # Business Requirement Input (Inside expander now)
+            requirement = st.text_area("Business Requirement / Context", 
+                                      height=100, 
+                                      placeholder="Example: We need to comply with GDPR...",
+                                      key="ai_requirement")
+
             # API Failsafe inside the setup expander
             with st.expander("🔑 API Settings (Failsafe)"):
                 direct_key = st.text_input("Direct API Key", value="", type="password", key="ai_direct_api_key")
                 check_key = direct_key or os.getenv("AI_API_KEY")
                 if check_key and len(check_key) > 8:
                     st.success(f"✅ Key Loaded: `{check_key[:4]}...{check_key[-4:]}`")
-
-        # Business Requirement Input (Outside setup expander for visibility)
-        requirement = st.text_area("Business Requirement / Context", 
-                                  height=100, 
-                                  placeholder="Example: We need to comply with GDPR...",
-                                  key="ai_requirement")
 
     if st.button("Analyze & Recommend CDEs", type="primary"):
         cols_to_analyze = file_columns
