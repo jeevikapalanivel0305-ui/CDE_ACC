@@ -225,11 +225,19 @@ class FabricConnector:
     # =========================================================
     # SQL ENDPOINT INTEGRATION (Hybrid Mode)
     # =========================================================
-    def get_sql_connection(self, connection_string, database_name=None):
-        """Create a pyodbc connection to Fabric SQL Endpoint with optional Database selection"""
+    def get_sql_connection(self, raw_endpoint, database_name=None, access_token=None):
+        """
+        Creates a pyodbc connection to the Fabric SQL Connection string.
+        Supports Service Principal, Interactive, and Token-based (MSAL) auth.
+        """
+        import pyodbc
+        import struct
+        
+        # SQL_COPT_SS_ACCESS_TOKEN is 1256 (for pyodbc)
+        SQL_COPT_SS_ACCESS_TOKEN = 1256
+        
         try:
             # Clean the string
-            raw_endpoint = str(connection_string).strip()
             raw_endpoint = str(raw_endpoint).strip()
             if raw_endpoint.startswith("https://"): raw_endpoint = raw_endpoint.replace("https://", "")
             if raw_endpoint.startswith("tcp:"): raw_endpoint = raw_endpoint.replace("tcp:", "")
@@ -242,7 +250,7 @@ class FabricConnector:
             drivers = pyodbc.drivers()
             best_driver = next((d for d in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"] if d in drivers), "SQL Server")
             
-            # 2. Build connection string
+            # 2. Build base connection string
             server_name = raw_endpoint.split(";")[0]
             if "," not in server_name and ":" not in server_name:
                 server_name += ",1433"
@@ -288,7 +296,7 @@ class FabricConnector:
                 token_bytes = access_token.encode("utf-16-le")
                 token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
                 
-                # Create connection object without connecting yet
+                # Create connection with token before connecting
                 conn = pyodbc.connect(connection_string, timeout=60, autocommit=True, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
             else:
                 conn = pyodbc.connect(connection_string, timeout=60, autocommit=True)
@@ -299,11 +307,11 @@ class FabricConnector:
             print(f"❌ [SQL] Connection error: {str(e)}")
             raise e
 
-    def list_tables(self, connection_string, database_name=None):
+    def list_tables(self, connection_string, database_name=None, access_token=None):
         """List all user tables in the Fabric SQL Endpoint"""
         conn = None
         try:
-            conn = self.get_sql_connection(connection_string, database_name)
+            conn = self.get_sql_connection(connection_string, database_name, access_token=access_token)
             cursor = conn.cursor()
             # Query for user tables
             cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'")
@@ -314,11 +322,11 @@ class FabricConnector:
         finally:
             if conn: conn.close()
 
-    def fetch_table_schema(self, connection_string, table_name, database_name=None):
+    def fetch_table_schema(self, connection_string, table_name, database_name=None, access_token=None):
         """Fetch column names and types from a Fabric table"""
         conn = None
         try:
-            conn = self.get_sql_connection(connection_string, database_name)
+            conn = self.get_sql_connection(connection_string, database_name, access_token=access_token)
             cursor = conn.cursor()
             
             # Extract schema and table name if provided as schema.table

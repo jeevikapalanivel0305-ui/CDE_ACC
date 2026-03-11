@@ -215,85 +215,103 @@ def render_ai_recommend():
             with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
             with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
         elif auth_mode == "Email & Password (AAD)":
-            st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Device Code Login**.")
+            st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Interactive Login**.")
             col1, col2 = st.columns(2)
             with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
             with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
         else:
-            st.info("💡 **Failsafe Mode**: Use this if popups don't appear. You'll get a code to enter in your browser.")
+            st.info("💡 **Failsafe Mode**: If popups don't appear, use the 'Device Code' buttons below.")
             creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
 
-        # Handle Device Code Flow State
-        if auth_mode == "Interactive Login (Standard)" and 'ai_fabric_device_flow' in st.session_state:
-            flow = st.session_state.ai_fabric_device_flow
-            st.success(f"👉 Please go to: **{flow['message'].split(' ')[-1]}**")
-            st.info(f"🔑 Your Code: **{flow['user_code']}**")
-            st.caption("The app will automatically detect when you've finished logging in.")
-            if st.button("❌ Cancel Login"):
-                del st.session_state.ai_fabric_device_flow
+        # --- Device Code Flow Step-by-Step UI ---
+        if auth_mode == "Interactive Login (Standard)":
+            col_code, col_verify = st.columns(2)
+            with col_code:
+                if st.button("🔑 1. Get Login Code", use_container_width=True):
+                    try:
+                        import msal
+                        client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554" 
+                        authority = "https://login.microsoftonline.com/common"
+                        app = msal.PublicClientApplication(client_id, authority=authority)
+                        flow = app.initiate_device_flow(scopes=["https://database.windows.net//.default"])
+                        if "user_code" in flow:
+                            st.session_state.ai_f_flow = flow
+                            st.rerun()
+                        else:
+                            st.error(f"Flow error: {flow.get('error_description')}")
+                    except Exception as e:
+                        st.error(f"Init error: {str(e)}")
+            
+            with col_verify:
+                if st.button("✅ 2. Verify & Connect", type="primary", use_container_width=True):
+                    if 'ai_f_flow' not in st.session_state:
+                        st.warning("Please click 'Get Login Code' first.")
+                    else:
+                        with st.spinner("Verifying your login..."):
+                            try:
+                                import msal
+                                from backend.fabric_connector import FabricConnector
+                                client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554"
+                                app = msal.PublicClientApplication(client_id, authority="https://login.microsoftonline.com/common")
+                                result = app.acquire_token_by_device_flow(st.session_state.ai_f_flow)
+                                
+                                if "access_token" in result:
+                                    st.session_state.ai_f_token = result["access_token"]
+                                    connector = FabricConnector("", "", "")
+                                    tables = connector.list_tables(f_sql, access_token=st.session_state.ai_f_token)
+                                    st.session_state.ai_fabric_tables = tables
+                                    st.session_state.ai_fabric_error = None
+                                    del st.session_state.ai_f_flow
+                                    st.success(f"Connected! Shared {len(tables)} tables.")
+                                    st.rerun()
+                                else:
+                                    st.error("Login not verified yet. Please enter the code in your browser first.")
+                            except Exception as e:
+                                st.error(f"Connect error: {str(e)}")
+
+        # Display Code if flow active
+        if 'ai_f_flow' in st.session_state and auth_mode == "Interactive Login (Standard)":
+            flow = st.session_state.ai_f_flow
+            st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b;">
+                <p><b>Login Required</b></p>
+                <p>1. Go to: <a href="{flow['verification_uri']}" target="_blank">{flow['verification_uri']}</a></p>
+                <p>2. Enter Code: <span style="font-family: monospace; font-size: 1.2em; color: #ff4b4b;">{flow['user_code']}</span></p>
+                <p style="font-size: 0.8em; color: #666;">Waiting for you to authorize in the browser...</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Cancel Login"):
+                del st.session_state.ai_f_flow
                 st.rerun()
 
-        # Trigger Discovery
-        if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
-            if not f_sql:
-                st.error("Please provide a SQL Endpoint first.")
-            else:
-                with st.spinner("Connecting to Fabric..."):
-                    try:
-                        from backend.fabric_connector import FabricConnector
-                        import msal
-                        
-                        st.session_state.ai_fabric_error = None
-                        access_token = None
-                        
-                        # Route credentials based on mode
-                        if auth_mode == "Service Principal (Automation/Cloud)":
-                            t_id = creds.get('fabric_tenant_id', '')
-                            c_id = creds.get('fabric_client_id', '')
-                            c_sec = creds.get('fabric_client_secret', '')
-                        elif auth_mode == "Email & Password (AAD)":
-                            t_id = ""
-                            c_id = creds.get('fabric_email', '')
-                            c_sec = f"AAD_PWD:{creds.get('fabric_password', '')}"
-                        else:
-                            # DEVICE CODE FLOW (MSAL)
-                            client_id = "89019623-1d02-4ee8-a5c9-94b63e84e554" # Microsoft CLI client ID (Public)
-                            tenant_id = "common"
-                            authority = f"https://login.microsoftonline.com/{tenant_id}"
-                            app = msal.PublicClientApplication(client_id, authority=authority)
+        # Traditional Discover Button (for Service Principal / AAD Pwd)
+        if auth_mode != "Interactive Login (Standard)":
+            if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
+                if not f_sql:
+                    st.error("Please provide a SQL Endpoint first.")
+                else:
+                    with st.spinner("Connecting to Fabric..."):
+                        try:
+                            from backend.fabric_connector import FabricConnector
+                            st.session_state.ai_fabric_error = None
                             
-                            scopes = ["https://database.windows.net//.default"]
-                            
-                            # Start Flow
-                            flow = app.initiate_device_flow(scopes=scopes)
-                            if "user_code" not in flow:
-                                raise Exception(f"Failed to initiate device flow: {flow.get('error_description', 'Unknown error')}")
-                            
-                            st.session_state.ai_fabric_device_flow = flow
-                            # We stop here and wait for the user to complete the flow
-                            # The user will click "Discover Tables" again or we can poll
-                            # For simplicity in Streamlit, let's poll once
-                            result = app.acquire_token_by_device_flow(flow)
-                            if "access_token" in result:
-                                access_token = result["access_token"]
-                                del st.session_state.ai_fabric_device_flow
+                            # Route credentials
+                            if auth_mode == "Service Principal (Automation/Cloud)":
+                                t_id, c_id, c_sec = creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', '')
                             else:
-                                st.session_state.ai_fabric_error = "Device code login timed out or was cancelled. Please try again."
-                                st.rerun()
+                                t_id, c_id, c_sec = "", creds.get('fabric_email', ''), f"AAD_PWD:{creds.get('fabric_password', '')}"
                             
-                            t_id, c_id, c_sec = "", "", ""
-                        
-                        connector = FabricConnector(t_id, c_id, c_sec)
-                        tables = connector.list_tables(f_sql, database_name=None, access_token=access_token) 
-                        st.session_state.ai_fabric_tables = tables
-                        if not tables:
-                            st.session_state.ai_fabric_error = "No tables found. Check your permissions."
-                        else:
-                            st.success(f"Successfully discovered {len(tables)} tables!")
-                    except Exception as e:
-                        st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
-                    finally:
-                        st.rerun()
+                            connector = FabricConnector(t_id, c_id, c_sec)
+                            tables = connector.list_tables(f_sql) 
+                            st.session_state.ai_fabric_tables = tables
+                            if not tables:
+                                st.session_state.ai_fabric_error = "No tables found. Check permissions."
+                            else:
+                                st.success(f"Successfully discovered {len(tables)} tables!")
+                                st.rerun()
+                        except Exception as e:
+                            st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
+                            st.rerun()
 
         # Connection Troubleshooting
         with st.expander("🛠️ Connection Troubleshooting"):
@@ -333,7 +351,8 @@ def render_ai_recommend():
                     from backend.fabric_connector import FabricConnector
                     creds = st.session_state.connector_creds
                     connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name="w1")
+                    token = st.session_state.get('ai_f_token')
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, access_token=token)
                     if schema:
                         st.session_state.ai_discovered_cols = [c['name'] for c in schema]
                         st.session_state.prev_ai_f_tab = fabric_table
