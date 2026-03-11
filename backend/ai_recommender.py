@@ -23,8 +23,8 @@ def get_gemini_client():
             try:
                 content = dotenv_path.read_text()
                 for line in content.splitlines():
-                    if 'GEMINI_API_KEY' in line:
-                        api_key = line.split('=')[1].strip().strip('"').strip("'")
+                    if 'GEMINI_API_KEY=' in line:
+                        api_key = line.split('=', 1)[1].strip().strip('"').strip("'")
                         os.environ["GEMINI_API_KEY"] = api_key # Put it back in env for consistency
                         break
             except Exception:
