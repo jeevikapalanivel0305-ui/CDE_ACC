@@ -185,30 +185,51 @@ def render_ai_recommend():
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
     else:
-        # Fabric Connector UI - Simplified without the grey box and refresh button
+        # Fabric Connector UI - Proactive Discovery
         f_sql = st.text_input("SQL Endpoint / Connection String", 
                              value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
                              type="password",
-                             key="ai_f_sql_input")
+                             key="ai_f_sql_input",
+                             placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
         
-        
-        # Clear tables if connection string changes
+        # Reset discovery when endpoint changes
         if 'prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql:
             st.session_state.ai_fabric_tables = []
             st.session_state.prev_f_sql = f_sql
+            st.session_state.ai_fabric_error = None
 
-        # Trigger fetch automatically if endpoint is provided and list is empty
-        if f_sql and not st.session_state.get('ai_fabric_tables'):
-            with st.spinner("Analyzing..."):
+        # Automatic Discovery Trigger
+        if f_sql and not st.session_state.get('ai_fabric_tables') and not st.session_state.get('ai_fabric_error'):
+            with st.spinner("Connecting to Fabric to discover tables..."):
                 try:
                     from backend.fabric_connector import FabricConnector
                     creds = st.session_state.connector_creds
-                    connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                    tables = connector.list_tables(f_sql, database_name="w1")
-                    st.session_state.ai_fabric_tables = tables
-                    if tables: st.rerun()
-                except Exception:
-                    pass
+                    
+                    # Validate credentials presence
+                    if not creds.get('fabric_tenant_id') or not creds.get('fabric_client_id'):
+                        st.session_state.ai_fabric_error = "Missing Fabric Credentials. Please configure them in the 'New Connection' section first."
+                    else:
+                        connector = FabricConnector(
+                            creds.get('fabric_tenant_id', ''), 
+                            creds.get('fabric_client_id', ''), 
+                            creds.get('fabric_client_secret', '')
+                        )
+                        tables = connector.list_tables(f_sql, database_name="w1")
+                        st.session_state.ai_fabric_tables = tables
+                        if not tables:
+                            st.session_state.ai_fabric_error = "No tables found in this workspace."
+                        st.rerun()
+                except Exception as e:
+                    st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
+                    st.rerun()
+
+        # Display Error if any
+        if st.session_state.get('ai_fabric_error'):
+            st.error(st.session_state.ai_fabric_error)
+            if st.button("Retry Discovery"):
+                st.session_state.ai_fabric_error = None
+                st.session_state.ai_fabric_tables = []
+                st.rerun()
 
         # Conditional Display: Dropdown vs Text Input
         fabric_tables = st.session_state.get('ai_fabric_tables', [])
