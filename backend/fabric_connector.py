@@ -241,22 +241,25 @@ class FabricConnector:
             drivers = pyodbc.drivers()
             best_driver = next((d for d in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"] if d in drivers), "SQL Server")
             
-            # 2. Build connection string manually to be robust
+            # 2. Build connection string in standard Fabric format
             server_name = raw_endpoint.split(";")[0]
-            if "," not in server_name: server_name += ",1433" # Default port
+            if "," not in server_name and ":" not in server_name:
+                server_name += ",1433" # Explicitly use Port 1433 as required by Fabric
             
-            # Start with mandatory encryption and timeout attributes for Fabric
-            connection_string = f"DRIVER={{{best_driver}}};SERVER={server_name}"
+            # Start with mandatory Fabric attributes
+            connection_string = f"Driver={{{best_driver}}};Server={server_name}"
             connection_string += ";Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=60"
             
-            # Inject Database if provided (CRITICAL for successful handshake in some environments)
+            # Inject Database if provided (Lakehouse/Warehouse name)
             if database_name:
-                connection_string += f";DATABASE={database_name}"
-            elif ";" in raw_endpoint:
-                # Try to extract database from the original endpoint string if not passed explicitly
-                for attr in raw_endpoint.split(";")[1:]:
-                    if "DATABASE=" in attr.upper():
-                        connection_string += f";{attr}"
+                connection_string += f";Database={database_name}"
+            elif "Initial Catalog=" in raw_endpoint:
+                # Direct database extraction from a full user string
+                db_part = raw_endpoint.split("Initial Catalog=")[1].split(";")[0]
+                connection_string += f";Database={db_part}"
+            elif "DATABASE=" in raw_endpoint.upper():
+                 db_part = raw_endpoint.upper().split("DATABASE=")[1].split(";")[0]
+                 connection_string += f";Database={db_part}"
             
             # 3. Handle Authentication
             if "AUTHENTICATION=" not in connection_string.upper():
@@ -280,7 +283,7 @@ class FabricConnector:
                 import re
                 log_str = re.sub(r"PWD=[^;]+", "PWD=********", connection_string)
             
-            print(f"🔗 [SQL] Connecting with 60s LoginTimeout: {log_str}")
+            print(f"🔗 [SQL] Connecting with robust string: {log_str}")
             
             # 5. Connect (autocommit=True helps with some cloud handshakes)
             conn = pyodbc.connect(connection_string, timeout=60, autocommit=True)

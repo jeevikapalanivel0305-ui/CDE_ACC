@@ -206,6 +206,8 @@ def render_ai_recommend():
         
         creds = st.session_state.connector_creds
         
+        st.caption("ℹ️ **Technical Note**: Fabric SQL Endpoints use the SQL Server protocol, which is why the 'SQL Server ODBC Driver' is used as a translator.")
+
         if auth_mode == "Service Principal (Automation/Cloud)":
             st.info("💡 Service Principal is required for Streamlit Cloud automation.")
             col1, col2, col3 = st.columns(3)
@@ -213,12 +215,12 @@ def render_ai_recommend():
             with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
             with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
         elif auth_mode == "Email & Password (AAD)":
-            st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Interactive Login** instead.")
+            st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Interactive Login**.")
             col1, col2 = st.columns(2)
             with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
             with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
         else:
-            st.info("💡 **Recommended for MFA**: This will open a Microsoft window for your email, password, and Authenticator code.")
+            st.info("💡 **Recommended for MFA**: This will open a Microsoft window. **Check your taskbar** if the window doesn't appear immediately.")
             creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
 
         # Trigger Discovery
