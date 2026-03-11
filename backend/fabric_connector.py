@@ -263,13 +263,24 @@ class FabricConnector:
                     connection_string += f";UID={self.client_id};PWD={self.client_secret};Authentication=ActiveDirectoryServicePrincipal"
                 else:
                     # Fallback to Interactive login
-                    connection_string += ";Authentication=ActiveDirectoryInteractive"
+                    auth_attr = ";Authentication=ActiveDirectoryInteractive"
+                    if self.client_id: # Use client_id as UID for email pre-fill if available
+                        auth_attr += f";UID={self.client_id}"
+                    connection_string += auth_attr
             
             # 4. SSL/Security settings for Driver 18+
             if "TrustServerCertificate" not in connection_string and "Driver 18" in connection_string:
                 connection_string += ";TrustServerCertificate=yes"
 
-            print(f"� [SQL] Connecting with string: {connection_string.split('PWD=')[0]}... [pwd masked]")
+            # Mask password for logging
+            log_str = connection_string
+            if "PWD=" in log_str:
+                parts = log_str.split("PWD=")
+                after_pwd = parts[1].split(";", 1)
+                mask = "********"
+                log_str = parts[0] + "PWD=" + mask + ((";" + after_pwd[1]) if len(after_pwd) > 1 else "")
+            
+            print(f"🔗 [SQL] Connecting with string: {log_str}")
             
             # 5. Connect (timeout increased for reliability)
             conn = pyodbc.connect(connection_string, timeout=30)

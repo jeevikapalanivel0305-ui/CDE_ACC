@@ -213,10 +213,8 @@ def render_ai_recommend():
             with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
         else:
             st.info("💡 Interactive Login will prompt for your email and password in a separate window.")
-            # Clear SP creds if they exist to force interactive mode in connector
-            temp_tenant = ""
-            temp_client = ""
-            temp_secret = ""
+            # Add email field for interactive mode to help pyodbc trigger the prompt
+            creds['fabric_email'] = st.text_input("Email (Optional)", value=creds.get('fabric_email', ''), placeholder="yourname@domain.com", key="ai_f_email_fl")
 
         # Trigger Discovery
         if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
@@ -228,10 +226,16 @@ def render_ai_recommend():
                         from backend.fabric_connector import FabricConnector
                         st.session_state.ai_fabric_error = None
                         
-                        # Use local vars for connector to avoid polluting session state if not needed
-                        t_id = creds.get('fabric_tenant_id', '') if use_sp else ""
-                        c_id = creds.get('fabric_client_id', '') if use_sp else ""
-                        c_sec = creds.get('fabric_client_secret', '') if use_sp else ""
+                        # Use local vars for connector
+                        if use_sp:
+                            t_id = creds.get('fabric_tenant_id', '')
+                            c_id = creds.get('fabric_client_id', '')
+                            c_sec = creds.get('fabric_client_secret', '')
+                        else:
+                            t_id = ""
+                            # Pass email as client_id to trigger interactive UID prompt
+                            c_id = creds.get('fabric_email', '') 
+                            c_sec = ""
                         
                         connector = FabricConnector(t_id, c_id, c_sec)
                         tables = connector.list_tables(f_sql, database_name="w1")
