@@ -213,20 +213,20 @@ def render_ai_recommend():
             with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
             with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
         elif auth_mode == "Email & Password (AAD)":
-            st.info("💡 Use this for direct authentication without a popup.")
+            st.warning("⚠️ **MFA Note**: If your account uses an Authenticator app/code, this mode will NOT work. Please use **Interactive Login** instead.")
             col1, col2 = st.columns(2)
             with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
             with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
         else:
-            st.info("💡 Interactive Login will prompt for your email and password in a separate window.")
-            creds['fabric_email'] = st.text_input("Email (Optional)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
+            st.info("💡 **Recommended for MFA**: This will open a Microsoft window for your email, password, and Authenticator code.")
+            creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
 
         # Trigger Discovery
         if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
             if not f_sql:
                 st.error("Please provide a SQL Endpoint first.")
             else:
-                with st.spinner("Connecting to Fabric (this may take up to 60s)..."):
+                with st.spinner("Connecting to Fabric... Please check for a login popup if using Interactive mode."):
                     try:
                         from backend.fabric_connector import FabricConnector
                         st.session_state.ai_fabric_error = None
@@ -239,7 +239,6 @@ def render_ai_recommend():
                         elif auth_mode == "Email & Password (AAD)":
                             t_id = ""
                             c_id = creds.get('fabric_email', '')
-                            # Use the prefix to tell the connector to use AAD Password mode
                             c_sec = f"AAD_PWD:{creds.get('fabric_password', '')}"
                         else:
                             t_id = ""
@@ -247,7 +246,17 @@ def render_ai_recommend():
                             c_sec = ""
                         
                         connector = FabricConnector(t_id, c_id, c_sec)
-                        tables = connector.list_tables(f_sql, database_name="w1")
+                        # Explicitly mention timeout in the UI log or keep it in the backend logic
+                        tables = connector.list_tables(f_sql, database_name=None) # Passing None to use default/connection string database
+                        st.session_state.ai_fabric_tables = tables
+                        if not tables:
+                            st.session_state.ai_fabric_error = "No tables found or access denied. Check your permissions in the Fabric Workspace."
+                        else:
+                            st.success(f"Successfully discovered {len(tables)} tables!")
+                        st.rerun()
+                    except Exception as e:
+                        st.session_state.ai_fabric_error = f"Connection failed: {str(e)}"
+                        st.rerun()
                         st.session_state.ai_fabric_tables = tables
                         if not tables:
                             st.session_state.ai_fabric_error = "No tables found or access denied."

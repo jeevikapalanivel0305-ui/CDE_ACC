@@ -245,42 +245,25 @@ class FabricConnector:
             server_name = raw_endpoint.split(";")[0]
             if "," not in server_name: server_name += ",1433" # Default port
             
-            connection_string = f"DRIVER={{{best_driver}}};SERVER={server_name};Network=dbmssocn"
+            # Start with mandatory encryption and timeout attributes for Fabric
+            connection_string = f"DRIVER={{{best_driver}}};SERVER={server_name}"
+            connection_string += ";Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=60"
             
-            # Inject Database if provided
-            if database_name:
-                connection_string += f";DATABASE={database_name}"
-            
-            # Apply existing attributes from user string if any
-            if ";" in raw_endpoint:
-                for attr in raw_endpoint.split(";")[1:]:
-                    if attr and "=" in attr: connection_string += f";{attr}"
-
             # 3. Handle Authentication
             if "AUTHENTICATION=" not in connection_string.upper():
                 if self.client_id and self.client_secret:
                     # Case A: Service Principal (Client ID + Secret)
                     connection_string += f";UID={self.client_id};PWD={self.client_secret};Authentication=ActiveDirectoryServicePrincipal"
-                elif self.client_id and not self.client_secret:
-                    # Determine if it's AAD Password or Interactive based on presence of a password in session/user context
-                    # If we have a password (passed as client_secret in a generic way), use AAD Password
-                    # But if we don't, use Interactive.
-                    # Since we use self.client_secret as the generic 'password' container:
+                elif self.client_secret and self.client_secret.startswith("AAD_PWD:"):
+                    # Case B: AAD Password (Email + Password)
+                    actual_pwd = self.client_secret.replace("AAD_PWD:", "")
+                    connection_string += f";UID={self.client_id};PWD={actual_pwd};Authentication=ActiveDirectoryPassword"
+                elif self.client_id:
+                    # Case C: Interactive Login with email hint (for MFA)
                     connection_string += f";UID={self.client_id};Authentication=ActiveDirectoryInteractive"
                 else:
+                    # Case D: Base Interactive Login
                     connection_string += ";Authentication=ActiveDirectoryInteractive"
-            
-            # Special Case: If the user explicitly wants AAD Password, we need to handle it.
-            # Let's add a mechanism where if client_secret starts with 'AAD_PWD:', we use AAD Password.
-            if self.client_secret and self.client_secret.startswith("AAD_PWD:"):
-                actual_pwd = self.client_secret.replace("AAD_PWD:", "")
-                # Overwrite the auth attributes
-                connection_string = connection_string.split(";Authentication=")[0]
-                connection_string += f";UID={self.client_id};PWD={actual_pwd};Authentication=ActiveDirectoryPassword"
-            
-            # 4. SSL/Security settings for Driver 18+
-            if "TrustServerCertificate" not in connection_string and "Driver 18" in connection_string:
-                connection_string += ";TrustServerCertificate=yes"
 
             # Mask password for logging
             log_str = connection_string
@@ -288,7 +271,7 @@ class FabricConnector:
                 import re
                 log_str = re.sub(r"PWD=[^;]+", "PWD=********", connection_string)
             
-            print(f"🔗 [SQL] Connecting with 60s timeout: {log_str}")
+            print(f"🔗 [SQL] Connecting with 60s LoginTimeout: {log_str}")
             
             # 5. Connect (timeout increased significantly for slow handshakes)
             conn = pyodbc.connect(connection_string, timeout=60)
