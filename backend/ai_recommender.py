@@ -106,7 +106,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
     
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt
         )
         
@@ -135,13 +135,20 @@ def recommend_cdes_from_columns(table_name, columns, industry="General"):
     Respond ONLY with a JSON array."""
     
     try:
+        # Check if client exists
+        if not client:
+            st.error("❌ Gemini Client not initialized. Please check your API key.")
+            return []
+            
         response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
         text = response.text
         if "```json" in text: text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text: text = text.split("```")[1].split("```")[0].strip()
         return json.loads(text)
     except Exception as e:
-        st.error(f"❌ AI Error: {str(e)}")
+        st.error(f"❌ AI Prediction Error: {str(e)}")
+        if "403" in str(e):
+            st.info("💡 Your API key might be restricted or restricted by region. Try creating a new one in Google AI Studio.")
         return []
 
 class AIRecommender:
