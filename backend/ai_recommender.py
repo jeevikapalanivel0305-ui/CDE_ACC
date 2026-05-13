@@ -1,17 +1,22 @@
 ﻿import streamlit as st
 import json
 import time
+import os
 import pandas as pd
 from openai import AzureOpenAI
 
 def get_ai_client():
-    """Initialize Azure OpenAI client"""
+    """Initialize Azure OpenAI client using st.secrets (Streamlit Cloud) or os.environ (local dev)"""
     try:
-        api_key = st.secrets.get("AZURE_OPENAI_API_KEY")
-        endpoint = st.secrets.get("AZURE_OPENAI_ENDPOINT")
-        api_version = st.secrets.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+        api_key = st.secrets.get("AZURE_OPENAI_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY")
+        endpoint = st.secrets.get("AZURE_OPENAI_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT")
+        api_version = (
+            st.secrets.get("AZURE_OPENAI_API_VERSION")
+            or os.environ.get("AZURE_OPENAI_API_VERSION")
+            or "2024-12-01-preview"
+        )
         if not api_key or not endpoint:
-            st.error(" AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets.")
+            st.error("AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets or environment variables.")
             return None
         return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
     except Exception as e:

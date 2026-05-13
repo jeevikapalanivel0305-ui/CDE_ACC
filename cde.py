@@ -151,16 +151,19 @@ Respond ONLY in this JSON format (no markdown, no code blocks):
 }}"""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
+        deployment = st.secrets.get("AZURE_OPENAI_DEPLOYMENTNAME", "gpt-4.1")
+        max_tokens = int(st.secrets.get("MAX_TOKENS", 16384))
+        response = client.chat.completions.create(
+            model=deployment,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens
         )
-        
-        response_text = response.text
+
+        response_text = response.choices[0].message.content
         response_text = response_text.replace("```json", "").replace("```", "").strip()
         result = json.loads(response_text)
         return result
-    
+
     except Exception as e:
         st.error(f"Error generating suggestions: {str(e)}")
         return {
@@ -1433,10 +1436,7 @@ def render_fabric_connector():
     """)
 
 def render_fabric_table_import():
-    """Import CDEs by scanning a specific Microsoft Fabric table schema"""
-    def sync_fabric_sql():
-        st.session_state.connector_creds['fabric_sql_endpoint'] = st.session_state.f_sql
-        st.session_state.connector_creds['fabric_table_name'] = st.session_state.f_tab
+    """Import CDEs by browsing Fabric tables via REST API (no SQL / port 1433 required)."""
 
     # Header with Logo
     col_logo, col_text = st.columns([1, 15])
@@ -1444,66 +1444,370 @@ def render_fabric_table_import():
         try:
             st.image("assets/fabric_Logo.png", width=40)
         except:
-            st.markdown("") 
+            st.markdown("")
     with col_text:
         st.markdown("#### Microsoft Fabric Table Import")
 
-    st.markdown("Connect to a specific Microsoft Fabric table via its SQL Endpoint to identify Critical Data Elements using AI.")
-    
-    # Connection section
-    with st.container(border=True):
-        st.markdown("##### SQL Endpoint Connection")
-        
-        f_sql = st.text_input("SQL Endpoint / Connection String", 
-                             help="e.g. xxxxxxxx.datawarehouse.fabric.microsoft.com;Authentication=ActiveDirectoryInteractive", 
-                             value=st.session_state.connector_creds['fabric_sql_endpoint'], 
-                             key="f_sql", on_change=sync_fabric_sql)
-        f_tab = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", value=st.session_state.connector_creds['fabric_table_name'], key="f_tab", on_change=sync_fabric_sql)
-        
-    # Fetch and Recommend
-    if st.button("Fetch Schema & Recommend CDEs", type="primary", use_container_width=True):
-        if not all([f_sql, f_tab]):
-            st.error("Please enter both the SQL Endpoint and Table Name.")
-        else:
-            with st.spinner(f"≡ƒöä Fetching schema for '{f_tab}' from Fabric..."):
-                try:
-                    from backend.fabric_connector import FabricConnector
-                    from backend.ai_recommender import AIRecommender
-                    
-                    # Use stored credentials
-                    creds = st.session_state.connector_creds
-                    connector = FabricConnector(
-                        creds.get('fabric_tenant_id', ''),
-                        creds.get('fabric_client_id', ''),
-                        creds.get('fabric_client_secret', '')
-                    )
-                    schema = connector.fetch_table_schema(f_sql, f_tab)
-                    
-                    if schema:
-                        st.success(f"Γ£à Found {len(schema)} columns in '{f_tab}'.")
-                        
-                        with st.spinner("Analyzing..."):
-                            recommender = AIRecommender()
-                            cols_list = [c['name'] for c in schema]
-                            recommendations = recommender.recommend_cdes_from_columns(f_tab, cols_list)
-                            
-                            if recommendations:
-                                st.session_state.candidate_queue = recommendations
-                                st.success(f"Γ£à AI suggested {len(recommendations)} potential CDEs!")
-                                st.session_state.onboard_sub_tab = "AI Recommend"
-                                st.rerun()
-                            else:
-                                st.warning("ΓÜá∩╕Å AI could not identify any CDEs from this schema.")
-                except Exception as e:
-                    st.error(f"Γ¥î Error: {str(e)}")
+    st.markdown(
+        "Connect to Microsoft Fabric using the REST API — "
+        "**no direct SQL connection (port 1433) required**."
+    )
 
-    st.markdown("##### Instructions")
+    # ── Require Fabric credentials from the Fabric Connector tab ─────────────
+    creds = st.session_state.connector_creds
+    has_creds = all([
+        creds.get('fabric_tenant_id'),
+        creds.get('fabric_client_id'),
+        creds.get('fabric_client_secret'),
+    ])
+
+    if not has_creds:
+        st.warning(
+            "Please enter your Fabric **Tenant ID**, **Client ID**, and **Client Secret** "
+            "in the **Fabric Connector** tab first, then return here."
+        )
+        return
+
+    def _get_connector(reuse_token=True):
+        c = FabricConnector(
+            creds['fabric_tenant_id'],
+            creds['fabric_client_id'],
+            creds['fabric_client_secret'],
+        )
+        if reuse_token and st.session_state.get('fab_token'):
+            c.token = st.session_state['fab_token']
+        return c
+
+    def _ensure_token():
+        if not st.session_state.get('fab_token'):
+            conn = _get_connector(reuse_token=False)
+            ok, msg = conn.authenticate()
+            if not ok:
+                st.error(f"Authentication failed: {msg}")
+                st.stop()
+            st.session_state['fab_token'] = conn.token
+
+    # ── Mode selector ─────────────────────────────────────────────────────────
+    mode = st.radio(
+        "Source type",
+        ["Warehouse (Connection String)", "Lakehouse (Browse)"],
+        horizontal=True,
+        key="fab_import_mode",
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # MODE 1 — WAREHOUSE VIA CONNECTION STRING
+    # ═══════════════════════════════════════════════════════════════
+    if mode == "Warehouse (Connection String)":
+
+        st.markdown(
+            "Paste the **SQL analytics endpoint** from your Fabric Warehouse settings. "
+            "The app will authenticate and list all tables automatically."
+        )
+
+        with st.container(border=True):
+            cs_input = st.text_input(
+                "SQL Endpoint / Connection String",
+                placeholder="e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.datawarehouse.fabric.microsoft.com",
+                type="password",
+                key="wh_conn_str",
+            )
+            connect_btn = st.button("Connect & List Tables", type="primary", key="wh_connect_btn")
+
+        if connect_btn:
+            if not cs_input.strip():
+                st.error("Please enter the SQL endpoint / connection string.")
+                st.stop()
+
+            with st.spinner("Authenticating…"):
+                _ensure_token()
+
+            # Parse workspace / warehouse GUIDs from connection string
+            connector = _get_connector()
+            guids = FabricConnector.parse_guids_from_connection_string(cs_input)
+
+            if not guids:
+                st.error(
+                    "No workspace/warehouse GUID found in the connection string. "
+                    "Expected format: `<guid>.datawarehouse.fabric.microsoft.com`"
+                )
+                st.stop()
+
+            # Try each GUID as workspace_id to find the one that lists warehouses
+            found_workspaces = []
+            found_warehouses = []
+            for g in guids:
+                try:
+                    whs = connector.list_warehouses(g)
+                    if whs:
+                        found_workspaces.append(g)
+                        for wh in whs:
+                            wh['_workspace_id'] = g
+                        found_warehouses.extend(whs)
+                        break
+                except Exception:
+                    continue
+
+            if not found_warehouses:
+                # Fall back: list all workspaces and search across all of them
+                try:
+                    all_ws = connector.list_workspaces()
+                    for ws in all_ws:
+                        try:
+                            whs = connector.list_warehouses(ws['id'])
+                            for wh in whs:
+                                wh['_workspace_id'] = ws['id']
+                            found_warehouses.extend(whs)
+                        except Exception:
+                            continue
+                except Exception as e:
+                    st.error(f"Could not list warehouses: {e}")
+                    st.stop()
+
+            if not found_warehouses:
+                st.error("No Warehouses found. Ensure the service principal has workspace access.")
+                st.stop()
+
+            st.session_state['wh_warehouses'] = found_warehouses
+            st.session_state.pop('wh_selected_wh_id', None)
+            st.session_state.pop('wh_tables', None)
+            st.rerun()
+
+        # ── Warehouse picker ─────────────────────────────────────────────────
+        warehouses = st.session_state.get('wh_warehouses', [])
+        if not warehouses:
+            st.stop()
+
+        wh_names = [wh.get('displayName', wh.get('id')) for wh in warehouses]
+        wh_ids   = [wh.get('id') for wh in warehouses]
+
+        prev_wh = st.session_state.get('wh_selected_wh_id')
+        prev_idx = wh_ids.index(prev_wh) if prev_wh in wh_ids else 0
+
+        with st.container(border=True):
+            st.markdown("##### Warehouse")
+            wh_choice = st.selectbox("Select Warehouse", wh_names, index=prev_idx, key="wh_sel")
+            new_wh_id = wh_ids[wh_names.index(wh_choice)]
+            selected_wh = warehouses[wh_ids.index(new_wh_id)]
+
+            if new_wh_id != st.session_state.get('wh_selected_wh_id'):
+                st.session_state.pop('wh_tables', None)
+                st.session_state['wh_selected_wh_id'] = new_wh_id
+
+        # ── Auto-fetch tables ─────────────────────────────────────────────────
+        if 'wh_tables' not in st.session_state:
+            ws_id_for_wh = selected_wh.get('_workspace_id')
+            if not ws_id_for_wh:
+                st.warning("Could not determine workspace for this warehouse.")
+                st.stop()
+            with st.spinner(f"Listing tables in '{wh_choice}'…"):
+                try:
+                    connector = _get_connector()
+                    tables = connector.list_warehouse_tables_rest(ws_id_for_wh, new_wh_id)
+                    st.session_state['wh_tables'] = tables
+                except Exception as e:
+                    st.error(f"Could not list tables: {e}")
+                    st.info(
+                        "If the executeQuery API is unavailable, enter the table name manually below."
+                    )
+                    st.session_state['wh_tables'] = []
+
+        wh_tables = st.session_state.get('wh_tables', [])
+
+        with st.container(border=True):
+            st.markdown("##### Table")
+            if wh_tables:
+                selected_table = st.selectbox("Select Table", wh_tables, key="wh_table_sel")
+            else:
+                selected_table = st.text_input(
+                    "Table Name (enter manually)",
+                    placeholder="e.g. dbo.Sales_Transactions",
+                    key="wh_table_manual",
+                )
+
+        with st.container(border=True):
+            st.markdown("##### Column Hints (optional)")
+            st.caption("Improves AI recommendations. Leave blank to infer from the table name.")
+            cols_input = st.text_input(
+                "Column names (comma-separated)",
+                placeholder="e.g. customer_id, account_balance, transaction_date",
+                key="wh_cols_input",
+            )
+
+        if st.button("Recommend CDEs with AI", type="primary", use_container_width=True, key="wh_recommend_btn"):
+            if not selected_table:
+                st.error("Please select or enter a table name.")
+            else:
+                col_list = [c.strip() for c in cols_input.split(",") if c.strip()] if cols_input else None
+                with st.spinner(f"Analysing table '{selected_table}'…"):
+                    try:
+                        from backend.ai_recommender import generate_cde_suggestions
+                        recs = generate_cde_suggestions(
+                            business_requirement=(
+                                f"Analyse the table '{selected_table}' from a Microsoft Fabric Warehouse "
+                                f"and identify Critical Data Elements."
+                            ),
+                            industry=st.session_state.get('selected_domain', 'General'),
+                            file_columns=col_list,
+                        )
+                        if recs:
+                            st.session_state.candidate_queue = recs
+                            st.success(f"AI suggested {len(recs)} potential CDEs!")
+                            st.session_state.onboard_sub_tab = "AI Recommend"
+                            st.rerun()
+                        else:
+                            st.warning("AI could not identify any CDEs from this table.")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+    # ═══════════════════════════════════════════════════════════════
+    # MODE 2 — LAKEHOUSE BROWSE
+    # ═══════════════════════════════════════════════════════════════
+    else:
+        # ── Step 1: Load workspaces ──────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown("##### Step 1 — Select Workspace")
+            load_ws_col, _ = st.columns([2, 5])
+            with load_ws_col:
+                load_ws = st.button("Load Workspaces", type="primary", key="fab_load_ws")
+
+            if load_ws:
+                with st.spinner("Authenticating and fetching workspaces…"):
+                    try:
+                        conn = _get_connector(reuse_token=False)
+                        ok, msg = conn.authenticate()
+                        if not ok:
+                            st.error(f"Authentication failed: {msg}")
+                            st.stop()
+                        st.session_state['fab_token'] = conn.token
+                        workspaces = conn.list_workspaces()
+                        st.session_state['fab_workspaces'] = workspaces
+                        for k in ('fab_selected_ws_id', 'fab_lakehouses', 'fab_selected_lh_id', 'fab_tables'):
+                            st.session_state.pop(k, None)
+                    except Exception as e:
+                        st.error(f"Error loading workspaces: {e}")
+                        st.stop()
+
+            workspaces = st.session_state.get('fab_workspaces', [])
+            if not workspaces:
+                st.info("Click **Load Workspaces** to connect.")
+            else:
+                ws_names = [w.get('displayName', w.get('id')) for w in workspaces]
+                ws_ids   = [w.get('id') for w in workspaces]
+                prev_ws_id = st.session_state.get('fab_selected_ws_id')
+                prev_idx   = ws_ids.index(prev_ws_id) if prev_ws_id in ws_ids else 0
+                ws_choice  = st.selectbox("Workspace", ws_names, index=prev_idx, key="fab_ws_sel")
+                new_ws_id  = ws_ids[ws_names.index(ws_choice)]
+
+                if new_ws_id != st.session_state.get('fab_selected_ws_id'):
+                    for k in ('fab_lakehouses', 'fab_selected_lh_id', 'fab_tables'):
+                        st.session_state.pop(k, None)
+                    st.session_state['fab_selected_ws_id'] = new_ws_id
+
+        ws_id = st.session_state.get('fab_selected_ws_id')
+        if not ws_id:
+            st.stop()
+
+        # ── Step 2: Select Lakehouse ─────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown("##### Step 2 — Select Lakehouse")
+
+            if 'fab_lakehouses' not in st.session_state:
+                with st.spinner("Fetching lakehouses…"):
+                    try:
+                        _ensure_token()
+                        connector = _get_connector()
+                        lakehouses = connector.list_workspace_items(ws_id, item_type='Lakehouse')
+                        st.session_state['fab_lakehouses'] = lakehouses
+                    except Exception as e:
+                        st.error(f"Error fetching lakehouses: {e}")
+                        st.stop()
+
+            lakehouses = st.session_state.get('fab_lakehouses', [])
+            if not lakehouses:
+                st.info("No Lakehouses found in this workspace. Try a different workspace.")
+                st.stop()
+
+            lh_names = [lh.get('displayName', lh.get('id')) for lh in lakehouses]
+            lh_ids   = [lh.get('id') for lh in lakehouses]
+            prev_lh  = st.session_state.get('fab_selected_lh_id')
+            prev_lh_idx = lh_ids.index(prev_lh) if prev_lh in lh_ids else 0
+            lh_choice   = st.selectbox("Lakehouse", lh_names, index=prev_lh_idx, key="fab_lh_sel")
+            new_lh_id   = lh_ids[lh_names.index(lh_choice)]
+
+            if new_lh_id != st.session_state.get('fab_selected_lh_id'):
+                st.session_state.pop('fab_tables', None)
+                st.session_state['fab_selected_lh_id'] = new_lh_id
+
+        lh_id = st.session_state.get('fab_selected_lh_id')
+        if not lh_id:
+            st.stop()
+
+        # ── Step 3: Select table ─────────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown("##### Step 3 — Select Table")
+
+            if 'fab_tables' not in st.session_state:
+                with st.spinner("Fetching tables…"):
+                    try:
+                        _ensure_token()
+                        connector = _get_connector()
+                        tables = connector.list_lakehouse_tables(ws_id, lh_id)
+                        st.session_state['fab_tables'] = tables
+                    except Exception as e:
+                        st.error(f"Error fetching tables: {e}")
+                        st.stop()
+
+            tables = st.session_state.get('fab_tables', [])
+            if not tables:
+                st.info("No tables found in this Lakehouse yet.")
+                st.stop()
+
+            table_names = [t.get('name', t.get('displayName', str(t))) for t in tables]
+            selected_table = st.selectbox("Table", table_names, key="fab_table_sel")
+
+        # ── Step 4: Optional column hints ────────────────────────────────────
+        with st.container(border=True):
+            st.markdown("##### Step 4 — Column Hints (optional)")
+            st.caption("Providing column names improves AI recommendations.")
+            cols_input = st.text_input(
+                "Column names (comma-separated)",
+                placeholder="e.g. customer_id, account_balance, transaction_date",
+                key="fab_cols_input",
+            )
+
+        if st.button("Recommend CDEs with AI", type="primary", use_container_width=True, key="fab_recommend_btn"):
+            col_list = [c.strip() for c in cols_input.split(",") if c.strip()] if cols_input else None
+            with st.spinner(f"Analysing table '{selected_table}'…"):
+                try:
+                    from backend.ai_recommender import generate_cde_suggestions
+                    recs = generate_cde_suggestions(
+                        business_requirement=(
+                            f"Analyse the table '{selected_table}' from a Microsoft Fabric Lakehouse "
+                            f"and identify Critical Data Elements."
+                        ),
+                        industry=st.session_state.get('selected_domain', 'General'),
+                        file_columns=col_list,
+                    )
+                    if recs:
+                        st.session_state.candidate_queue = recs
+                        st.success(f"AI suggested {len(recs)} potential CDEs!")
+                        st.session_state.onboard_sub_tab = "AI Recommend"
+                        st.rerun()
+                    else:
+                        st.warning("AI could not identify any CDEs from this table.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    # ── Setup requirements ────────────────────────────────────────────────────
+    st.markdown("##### Setup Requirements")
     st.markdown("""
-    1. **Copy the SQL Endpoint** from your Fabric Lakehouse or Warehouse settings.
-    2. **Enter the Table Name** you want to scan.
-    3. **Click Fetch & Recommend** to start the AI analysis.
-    4. Suggested CDEs will appear in the **AI Recommend** tab for your review.
+    - Azure AD **App Registration** with **Contributor** role in the target Fabric workspace
+    - Service Principal granted access to the workspace in the **Fabric Admin portal**
+    - Tenant ID, Client ID, Client Secret entered in the **Fabric Connector** tab
     """)
+
+
 
 def get_score_value(row, col, use_default=True):
     """Get a score value from a row, with validation"""
@@ -2134,80 +2438,85 @@ def render_register_page():
 
             # --- Fabric Export Section ---
             st.markdown("##### Export to Microsoft Fabric")
-            
-            sql_end = st.session_state.connector_creds.get('fabric_sql_endpoint', '')
-            sql_db = "w1" # Default
-            
-            col_end, col_db = st.columns([2, 1])
-            with col_end:
-                sql_end = st.text_input("SQL Endpoint (Connection String)", 
-                                       value=sql_end, 
-                                       type="password",
-                                       help="SQL connection string from Warehouse settings.", 
-                                       key="sql_end_tab2")
-            with col_db:
-                sql_db = st.text_input("Warehouse Name", value=sql_db, help="Enter the name of your Warehouse (e.g. 'w1')", key="sql_db_tab2")
-            
-            # Table Selection Row
-            tcol1, tcol2 = st.columns([2, 3])
-            with tcol1:
-                table_mode = st.selectbox("Target Table", ["Existing Table", "New Table"], key="sync_mode_tab2")
-                create_needed = (table_mode == "New Table")
-            
-            with tcol2:
-                if table_mode == "Existing Table":
-                    # Auto-fetch tables if list is empty
-                    if sql_end and not st.session_state.get('fabric_tables'):
-                        with st.spinner("Fetching tables..."):
-                            try:
-                                from backend.fabric_connector import FabricConnector
-                                creds = st.session_state.connector_creds
-                                connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                                st.session_state.fabric_tables = connector.list_tables(sql_end, database_name=sql_db)
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"ΓÜá∩╕Å Could not load tables: {str(e)}")
-                                sql_tab = st.text_input("Target Table Name", value="", help="Enter table name manually.", key="sync_tab_manual_tab2")
-                    
-                    if st.session_state.get('fabric_tables'):
-                        sql_tab = st.selectbox("Select Existing Table", st.session_state.fabric_tables, key="sync_tab_list_tab2")
-                    else:
-                        sql_tab = st.text_input("Target Table Name", value="", help="Enter table name manually.", key="sync_tab_manual_fallback_tab2")
-                else:
-                    sql_tab = st.text_input("New Table Name", value="", key="sync_tab_new_tab2")
-            
-            # Place Export button in columns to keep it short and on the left
-            btn_col1, btn_col2 = st.columns([2, 10])
-            with btn_col1:
-                if st.button("Export", type="primary", use_container_width=True, key="fabric_export_btn_tab2"):
+
+            st.info(
+                "**Note:** Direct SQL connections (port 1433) are blocked on Streamlit Cloud. "
+                "Use **Download as Excel** below to export your CDE register, then load it into "
+                "Fabric via a Data Pipeline or Notebook."
+            )
+
+            # Excel download (works everywhere, no SQL needed)
+            dl_col, _ = st.columns([2, 5])
+            with dl_col:
+                excel_bytes = export_cdes_to_excel(export_list)
+                st.download_button(
+                    label="Download CDE Register (Excel)",
+                    data=excel_bytes,
+                    file_name=f"CDE_Register_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    type="primary",
+                    key="export_excel_register",
+                )
+
+            # ── Optional: SQL export for on-premises / self-hosted Streamlit ────
+            with st.expander("Advanced: SQL Endpoint export (on-premises / self-hosted only)", expanded=False):
+                st.caption(
+                    "This section requires port 1433 to be open. "
+                    "It will not work on Streamlit Cloud."
+                )
+                sql_end = st.session_state.connector_creds.get('fabric_sql_endpoint', '')
+                sql_db  = "w1"
+
+                col_end, col_db = st.columns([2, 1])
+                with col_end:
+                    sql_end = st.text_input(
+                        "SQL Endpoint (Connection String)",
+                        value=sql_end,
+                        type="password",
+                        help="SQL connection string from Warehouse settings.",
+                        key="sql_end_tab2",
+                    )
+                with col_db:
+                    sql_db = st.text_input(
+                        "Warehouse Name",
+                        value=sql_db,
+                        help="e.g. 'w1'",
+                        key="sql_db_tab2",
+                    )
+
+                sql_tab = st.text_input("Target Table Name", value="cde_register", key="sync_tab_new_tab2")
+                create_needed = st.checkbox("Create table if it does not exist", value=True, key="sync_create_tab2")
+
+                if st.button("Export via SQL", type="primary", key="fabric_export_btn_tab2"):
                     if not sql_end or not sql_tab:
                         st.error("Please provide SQL Endpoint and Table Name.")
                     else:
-                        with st.spinner("Exporting..."):
+                        with st.spinner("Exporting…"):
                             try:
-                                from backend.fabric_connector import FabricConnector
                                 creds = st.session_state.connector_creds
                                 connector = FabricConnector(
                                     creds.get('fabric_tenant_id', ''),
                                     creds.get('fabric_client_id', ''),
-                                    creds.get('fabric_client_secret', '')
+                                    creds.get('fabric_client_secret', ''),
                                 )
-                                
-                                conn = connector.get_sql_connection(sql_end, database_name=sql_db)
-                                df_to_sync = pd.DataFrame(export_list) # Use the filtered export_list
-                                success, msg = connector.sync_to_fabric(df_to_sync, sql_end, sql_tab, database_name=sql_db, create_if_not_exists=create_needed)
-                                
+                                df_to_sync = pd.DataFrame(export_list)
+                                success, msg = connector.sync_to_fabric(
+                                    df_to_sync, sql_end, sql_tab,
+                                    database_name=sql_db,
+                                    create_if_not_exists=create_needed,
+                                )
                                 if success:
-                                    st.success("Exported")
+                                    st.success(msg)
                                     st.session_state.connector_creds['fabric_sql_endpoint'] = sql_end
                                 else:
                                     if "denied" in msg.lower() or "368" in msg:
-                                        st.error("Permission Denied (Read-Only Endpoint)")
-                                        st.warning("Lakehouse SQL Endpoints are Read-Only. Please use a Warehouse endpoint (usually starts with data-) to export data!")
+                                        st.error("Permission Denied — Lakehouse SQL Endpoints are read-only. Use a Warehouse endpoint.")
                                     else:
                                         st.error(msg)
                             except Exception as e:
                                 st.error(str(e))
+
         else:
             st.info("No CDEs to export.")
 

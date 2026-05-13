@@ -75,88 +75,137 @@ class FabricConnector:
         }
 
     # =========================================================
-    # FETCH FABRIC ITEMS (Simulated/Real)
+    # WORKSPACE & ITEM DISCOVERY (REST API – no port 1433)
+    # =========================================================
+    def list_workspaces(self):
+        """List all Fabric workspaces accessible to the service principal."""
+        url = f"{self.base_url}/workspaces"
+        resp = requests.get(url, headers=self._headers(), timeout=30)
+        if resp.status_code == 200:
+            return resp.json().get('value', [])
+        raise Exception(
+            f"Failed to list workspaces (HTTP {resp.status_code}): "
+            f"{resp.json().get('message', resp.text)}"
+        )
+
+    def list_workspace_items(self, workspace_id, item_type=None):
+        """List items inside a workspace. Optionally filter by item_type (e.g. 'Lakehouse', 'Warehouse')."""
+        url = f"{self.base_url}/workspaces/{workspace_id}/items"
+        params = {"type": item_type} if item_type else {}
+        resp = requests.get(url, headers=self._headers(), params=params, timeout=30)
+        if resp.status_code == 200:
+            return resp.json().get('value', [])
+        raise Exception(
+            f"Failed to list workspace items (HTTP {resp.status_code}): "
+            f"{resp.json().get('message', resp.text)}"
+        )
+
+    def list_lakehouse_tables(self, workspace_id, lakehouse_id):
+        """List tables in a Fabric Lakehouse via the Lakehouse Tables REST API (no SQL required)."""
+        url = f"{self.base_url}/workspaces/{workspace_id}/lakehouses/{lakehouse_id}/tables"
+        resp = requests.get(url, headers=self._headers(), timeout=30)
+        if resp.status_code == 200:
+            body = resp.json()
+            # API returns either {"data": [...]} or {"value": [...]}
+            return body.get('data', body.get('value', []))
+        raise Exception(
+            f"Failed to list lakehouse tables (HTTP {resp.status_code}): "
+            f"{resp.json().get('message', resp.text)}"
+        )
+
+    def list_warehouses(self, workspace_id):
+        """List Fabric Warehouses in a workspace via REST API."""
+        url = f"{self.base_url}/workspaces/{workspace_id}/warehouses"
+        resp = requests.get(url, headers=self._headers(), timeout=30)
+        if resp.status_code == 200:
+            return resp.json().get('value', [])
+        raise Exception(
+            f"Failed to list warehouses (HTTP {resp.status_code}): "
+            f"{resp.json().get('message', resp.text)}"
+        )
+
+    def list_warehouse_tables_rest(self, workspace_id, warehouse_id):
+        """List tables in a Fabric Warehouse via the executeQuery REST endpoint (no SQL/port 1433)."""
+        import re as _re
+        url = f"{self.base_url}/workspaces/{workspace_id}/warehouses/{warehouse_id}/executeQuery"
+        payload = {
+            "queryText": (
+                "SELECT TABLE_SCHEMA, TABLE_NAME "
+                "FROM INFORMATION_SCHEMA.TABLES "
+                "WHERE TABLE_TYPE = 'BASE TABLE' "
+                "ORDER BY TABLE_SCHEMA, TABLE_NAME"
+            )
+        }
+        resp = requests.post(url, headers=self._headers(), json=payload, timeout=60)
+        if resp.status_code in (200, 202):
+            data = resp.json()
+            results = data.get('results', data.get('data', []))
+            if isinstance(results, list) and results:
+                rows = results[0].get('rows', [])
+                return [
+                    f"{row[0]}.{row[1]}" if row[0] not in ('dbo', '') else row[1]
+                    for row in rows if len(row) >= 2
+                ]
+            return []
+        raise Exception(
+            f"executeQuery failed (HTTP {resp.status_code}): "
+            f"{resp.json().get('message', resp.text)}"
+        )
+
+    @staticmethod
+    def parse_guids_from_connection_string(connection_string):
+        """Extract all GUIDs from a Fabric SQL connection string.
+
+        Fabric Warehouse SQL endpoints typically look like:
+          <workspaceId>.datawarehouse.fabric.microsoft.com
+        or
+          <warehouseId>-<workspaceId>.datawarehouse.fabric.microsoft.com
+        Returns a list of all GUIDs found (order: first found = potential workspace_id).
+        """
+        import re as _re
+        return _re.findall(
+            r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+            connection_string.lower()
+        )
+
+    # =========================================================
+    # FETCH FABRIC ITEMS (Real REST API)
     # =========================================================
     def fetch_cdes(self, debug=False):
         """
-        Fetch 'CDEs' from Fabric.
-        
-        Since Fabric doesn't have a direct 'CDE' concept like Purview's Data Governance yet,
-        we will map Fabric Items (Lakehouses, Warehouses, Datasets) as potential CDEs.
+        Fetch CDEs from Fabric by listing all workspace items via the REST API.
+        Maps Lakehouses, Warehouses, and Semantic Models to CDEs.
+        Falls back to sample data only if the API call fails.
         """
-        # Ensure authenticated
         if not self.token:
-             success, msg = self.authenticate(debug)
-             if not success:
-                 raise Exception(msg)
+            success, msg = self.authenticate(debug)
+            if not success:
+                raise Exception(msg)
 
         try:
-            # ---------------------------------------------------------
-            # REAL API CALL (if permissions allow)
-            # ---------------------------------------------------------
-            # url = f"{self.base_url}/workspaces"
-            # r = requests.get(url, headers=self._headers(), timeout=30)
-            # if r.status_code == 200:
-            #     workspaces = r.json().get('value', [])
-            #     # ... iterate workspaces and get items ...
-            # ---------------------------------------------------------
-            
-            # ---------------------------------------------------------
-            # SIMULATION / MOCK DATA
-            # (For demonstration until Service Principal has correct Fabric Admin scopes)
-            # ---------------------------------------------------------
             if debug:
-                print(" Using Simulated Fabric Data for demonstration (API might require Admin consent)")
-            
-            # Simulated Fabric Items
-            fabric_items = [
-                {
-                    "id": "fab-001",
-                    "displayName": "Sales_Gold_Lakehouse",
-                    "type": "Lakehouse",
-                    "workspaceId": "ws-sales-01", 
-                    "workspaceName": "Sales Analytics",
-                    "description": "Gold layer data for sales reporting. Contains validated transaction records."
-                },
-                {
-                    "id": "fab-002",
-                    "displayName": "Customer_360_Dataset",
-                    "type": "SemanticModel",
-                    "workspaceId": "ws-marketing-01",
-                    "workspaceName": "Marketing Ops",
-                    "description": "Unified customer view including demographics and behavioral data."
-                },
-                {
-                    "id": "fab-003",
-                    "displayName": "Finance_GL_Warehouse",
-                    "type": "Warehouse",
-                    "workspaceId": "ws-finance-01",
-                    "workspaceName": "Finance & Risk",
-                    "description": "General Ledger data for monthly financial reporting."
-                },
-                {
-                    "id": "fab-004",
-                    "displayName": "Raw_IoT_Telemetry",
-                    "type": "KQLDatabase",
-                    "workspaceId": "ws-ops-01",
-                    "workspaceName": "Operations",
-                    "description": "Real-time telemetry from manufacturing sensors."
-                },
-                {
-                     "id": "fab-005",
-                     "displayName": "HR_Employee_Master",
-                     "type": "Lakehouse",
-                     "workspaceId": "ws-hr-01",
-                     "workspaceName": "Human Resources",
-                     "description": "Master employee records including sensitive PII."
-                }
-            ]
-            
-            cdes = []
-            for item in fabric_items:
-                cdes.append(self._map_to_cde(item))
-                
-            return cdes
+                print("[Fabric] Fetching workspaces via REST API...")
+
+            workspaces = self.list_workspaces()
+
+            fabric_items = []
+            for ws in workspaces:
+                ws_id = ws.get('id')
+                ws_name = ws.get('displayName', 'Unknown Workspace')
+                try:
+                    items = self.list_workspace_items(ws_id)
+                    for item in items:
+                        item['workspaceId'] = ws_id
+                        item['workspaceName'] = ws_name
+                        fabric_items.append(item)
+                except Exception as item_err:
+                    if debug:
+                        print(f"[Fabric] Could not fetch items for workspace '{ws_name}': {item_err}")
+
+            if debug:
+                print(f"[Fabric] Found {len(fabric_items)} items across {len(workspaces)} workspaces")
+
+            return [self._map_to_cde(item) for item in fabric_items]
 
         except Exception as e:
             raise Exception(f"Failed to fetch Fabric items: {str(e)}")
