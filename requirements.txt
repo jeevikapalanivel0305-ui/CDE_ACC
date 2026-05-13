@@ -6,3 +6,4 @@ pyodbc
 openai
 msal
 openpyxl
+python-dotenv
