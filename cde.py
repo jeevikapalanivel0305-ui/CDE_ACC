@@ -1,4 +1,4 @@
-"""
+﻿"""
 CDE Risk Assessment Platform
 Critical Data Element Governance Platform
 Powered by iLink Digital
@@ -24,7 +24,6 @@ load_dotenv(dotenv_path=dotenv_path)
 # Add current directory to path to find backend modules if needed
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from google import genai
 from backend.purview_connector import PurviewConnector
 from backend.fabric_connector import FabricConnector
 from backend.ai_recommender import render_ai_recommend, generate_cde_suggestions, get_ai_client
@@ -36,7 +35,7 @@ import base64
 # ============================================
 st.set_page_config(
     page_title="CDE Catalyst | iLink Digital",
-    page_icon="🛡️",
+    page_icon="≡ƒ¢í∩╕Å",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -297,10 +296,10 @@ def init_session_state():
         if 'fabric_client_secret' not in st.session_state: st.session_state.fabric_client_secret = ""
         
         # Log first initialization
-        print("🔧 FIRST INITIALIZATION - Setting up initial CDEs")
+        print("≡ƒöº FIRST INITIALIZATION - Setting up initial CDEs")
     else:
         # Already initialized - do NOTHING to st.session_state.cdes
-        print(f"♻️ APP RERUN - Preserving existing {len(st.session_state.cdes)} CDEs")
+        print(f"ΓÖ╗∩╕Å APP RERUN - Preserving existing {len(st.session_state.cdes)} CDEs")
 
 # ============================================
 # HEADER
@@ -430,7 +429,7 @@ def render_sidebar():
             is_active = (label == current_tab)
             
             if is_active:
-                circ = '<div style="width:22px;height:22px;min-width:22px;border-radius:50%;background:#CC0000;border:2px solid #CC0000;color:white;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">✓</div>'
+                circ = '<div style="width:22px;height:22px;min-width:22px;border-radius:50%;background:#CC0000;border:2px solid #CC0000;color:white;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">Γ£ô</div>'
                 lbl = f'<span style="font-size:13px;font-weight:600;color:#1a1a1a;font-family:Inter,sans-serif;">{label}</span>'
             else:
                 circ = '<div style="width:22px;height:22px;min-width:22px;border-radius:50%;background:transparent;border:2px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;"></div>'
@@ -628,7 +627,7 @@ def render_cde_view():
     filtered_manage_options = []
     
     for cde in st.session_state.cdes:
-        # 🔹 FILTER LOGIC
+        # ≡ƒö╣ FILTER LOGIC
         if show_ai_only and not cde.get('ai_suggested', False):
             continue
             
@@ -799,7 +798,7 @@ def render_cde_add():
                     'add_name': '', 'add_domain': DOMAINS[0], 'add_source': '', 'add_steward': '', 
                     'add_owner': '', 'add_def': '', 'eval_selected_cde': None
                 }
-                st.success(f"✅ Added CDE: {name} ({new_cde['id']})")
+                st.success(f"Γ£à Added CDE: {name} ({new_cde['id']})")
                 st.rerun()
             else:
                 st.error("Please enter a CDE name")
@@ -856,7 +855,7 @@ def render_cde_upload():
     else:
         df = pd.read_excel(uploaded_file)
         
-    st.success(f"✅ Loaded: {uploaded_file.name}")
+    st.success(f"Γ£à Loaded: {uploaded_file.name}")
 
     with st.expander("Preview Data", expanded=True):
         st.table(df.head(10))
@@ -899,7 +898,7 @@ def render_cde_upload():
     rd_col = find_col(["recovery", "rd"])
 
     # --------------------------------------------------
-    # UI — VALUE DROPDOWNS
+    # UI ΓÇö VALUE DROPDOWNS
     # --------------------------------------------------
     st.markdown("##### CDE Values")
 
@@ -935,26 +934,26 @@ def render_cde_upload():
 
     r1, r2, r3 = st.columns(3)
     with r1:
-        bi = st.selectbox("Business Impact (1–5)", score_values(), index=0)
+        bi = st.selectbox("Business Impact (1ΓÇô5)", score_values(), index=0)
     with r2:
-        rc = st.selectbox("Regulatory Compliance (1–5)", score_values(), index=0)
+        rc = st.selectbox("Regulatory Compliance (1ΓÇô5)", score_values(), index=0)
     with r3:
-        dq = st.selectbox("Data Quality Risk (1–5)", score_values(), index=0)
+        dq = st.selectbox("Data Quality Risk (1ΓÇô5)", score_values(), index=0)
 
     r4, r5, r6 = st.columns(3)
     with r4:
-        sr = st.selectbox("Security Risk (1–5)", score_values(), index=0)
+        sr = st.selectbox("Security Risk (1ΓÇô5)", score_values(), index=0)
     with r5:
-        sc = st.selectbox("System Complexity (1–5)", score_values(), index=0)
+        sc = st.selectbox("System Complexity (1ΓÇô5)", score_values(), index=0)
     with r6:
-        rd = st.selectbox("Recovery Difficulty (1–5)", score_values(), index=0)
+        rd = st.selectbox("Recovery Difficulty (1ΓÇô5)", score_values(), index=0)
 
     # --------------------------------------------------
     # IMPORT LOGIC (CRITICAL PART)
     # --------------------------------------------------
     if st.button("Import CDE", type="primary"):
 
-        # 🔹 IF NOTHING SELECTED → IMPORT ALL
+        # ≡ƒö╣ IF NOTHING SELECTED ΓåÆ IMPORT ALL
         if not sel_name:
             rows_to_import = df.copy()
         else:
@@ -1006,10 +1005,10 @@ def render_cde_upload():
             imported += 1
 
         if imported > 0:
-            st.success(f"✅ Imported {imported} new CDE(s).")
+            st.success(f"Γ£à Imported {imported} new CDE(s).")
         
         if skipped > 0:
-            st.info(f"ℹ️ Skipped {skipped} duplicate CDE(s) that already exist in the register.")
+            st.info(f"Γä╣∩╕Å Skipped {skipped} duplicate CDE(s) that already exist in the register.")
             
         if imported > 0:
             st.rerun()
@@ -1102,7 +1101,7 @@ def render_purview_connector():
             if not all([purview_account, tenant_id, client_id, client_secret]):
                 st.error("Please fill in all required fields")
             else:
-                with st.spinner("🔄 Fetching CDEs from Purview..."):
+                with st.spinner("≡ƒöä Fetching CDEs from Purview..."):
                     try:
                         connector = PurviewConnector(
                             purview_account,
@@ -1114,28 +1113,28 @@ def render_purview_connector():
                         # Authenticate
                         success, auth_msg = connector.authenticate()
                         if not success:
-                            st.error(f"❌ Authentication failed: {auth_msg}")
+                            st.error(f"Γ¥î Authentication failed: {auth_msg}")
                             st.stop()
                         
-                        st.success("✅ Authentication successful!")
+                        st.success("Γ£à Authentication successful!")
                         
                         # Fetch CDEs
                         cdes = connector.fetch_cdes(debug=True)
                         
                         if cdes:
-                            st.success(f"✅ Found {len(cdes)} CDEs!")
+                            st.success(f"Γ£à Found {len(cdes)} CDEs!")
                             
                             # Store in session state for export
                             st.session_state.purview_cdes = cdes
                             
                             
                         else:
-                            st.warning("⚠️ No CDEs found in Purview")
+                            st.warning("ΓÜá∩╕Å No CDEs found in Purview")
                             
                     except Exception as e:
-                        st.error(f"❌ Error fetching CDEs: {str(e)}")
+                        st.error(f"Γ¥î Error fetching CDEs: {str(e)}")
                         import traceback
-                        with st.expander("🐛 Debug Information"):
+                        with st.expander("≡ƒÉ¢ Debug Information"):
                             st.code(traceback.format_exc())
     
     # --------------------------------------------------
@@ -1176,10 +1175,10 @@ def render_purview_connector():
                  st.session_state.purview_import_successful = True
                  st.session_state.purview_imported_count = count
                  st.session_state.switch_to_view_tab = True
-                 st.success(f"✅ Imported {count} new CDEs from Purview!")
+                 st.success(f"Γ£à Imported {count} new CDEs from Purview!")
              
              if skipped > 0:
-                 st.info(f"ℹ️ Skipped {skipped} duplicate items that already exist in the register.")
+                 st.info(f"Γä╣∩╕Å Skipped {skipped} duplicate items that already exist in the register.")
                  
              if count > 0:
                  st.rerun()
@@ -1188,7 +1187,7 @@ def render_purview_connector():
         
         # Show persistent import success prompt below the button
         if st.session_state.get('purview_import_successful'):
-            st.success("✅ Imported")
+            st.success("Γ£à Imported")
 
 
 
@@ -1232,10 +1231,10 @@ def render_purview_connector():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
-                    st.success("✅ Excel file ready for download!")
+                    st.success("Γ£à Excel file ready for download!")
                     
                 except Exception as e:
-                    st.error(f"❌ Error creating Excel: {str(e)}")
+                    st.error(f"Γ¥î Error creating Excel: {str(e)}")
     
     # Instructions
     st.markdown("##### Instructions")
@@ -1292,7 +1291,7 @@ def render_fabric_connector():
             if not all([fabric_tenant_id, fabric_client_id, fabric_client_secret]):
                 st.error("Please fill in all required fields")
             else:
-                with st.spinner("🔄 Fetching Items from Fabric..."):
+                with st.spinner("≡ƒöä Fetching Items from Fabric..."):
                     try:
                         connector = FabricConnector(
                             fabric_tenant_id,
@@ -1303,27 +1302,27 @@ def render_fabric_connector():
                         # Authenticate
                         success, auth_msg = connector.authenticate()
                         if not success:
-                            st.error(f"❌ Authentication failed: {auth_msg}")
+                            st.error(f"Γ¥î Authentication failed: {auth_msg}")
                             st.stop()
                         
-                        st.success("✅ Authentication successful!")
+                        st.success("Γ£à Authentication successful!")
                         
                         # Fetch CDEs
                         cdes = connector.fetch_cdes(debug=True)
                         
                         if cdes:
-                            st.success(f"✅ Found {len(cdes)} Fabric Items!")
+                            st.success(f"Γ£à Found {len(cdes)} Fabric Items!")
                             
                             # Store in session state for export
                             st.session_state.fabric_cdes = cdes
                             
                         else:
-                            st.warning("⚠️ No items found in Fabric")
+                            st.warning("ΓÜá∩╕Å No items found in Fabric")
                             
                     except Exception as e:
-                        st.error(f"❌ Error fetching Fabric items: {str(e)}")
+                        st.error(f"Γ¥î Error fetching Fabric items: {str(e)}")
                         import traceback
-                        with st.expander("🐛 Debug Information"):
+                        with st.expander("≡ƒÉ¢ Debug Information"):
                             st.code(traceback.format_exc())
     
     # --------------------------------------------------
@@ -1364,10 +1363,10 @@ def render_fabric_connector():
                  st.session_state.fabric_import_successful = True
                  st.session_state.fabric_imported_count = count
                  st.session_state.switch_to_view_tab = True
-                 st.success(f"✅ Imported {count} new CDEs from Fabric!")
+                 st.success(f"Γ£à Imported {count} new CDEs from Fabric!")
              
              if skipped > 0:
-                 st.info(f"ℹ️ Skipped {skipped} duplicate items that already exist in the register.")
+                 st.info(f"Γä╣∩╕Å Skipped {skipped} duplicate items that already exist in the register.")
                  
              if count > 0:
                  st.rerun()
@@ -1376,7 +1375,7 @@ def render_fabric_connector():
 
         # Show persistent import success prompt below the button
         if st.session_state.get('fabric_import_successful'):
-            st.success("✅ Imported")
+            st.success("Γ£à Imported")
 
     
     with col2:
@@ -1419,10 +1418,10 @@ def render_fabric_connector():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
-                    st.success("✅ Excel file ready for download!")
+                    st.success("Γ£à Excel file ready for download!")
                     
                 except Exception as e:
-                    st.error(f"❌ Error creating Excel: {str(e)}")
+                    st.error(f"Γ¥î Error creating Excel: {str(e)}")
     
     # Instructions
     st.markdown("##### Instructions")
@@ -1466,7 +1465,7 @@ def render_fabric_table_import():
         if not all([f_sql, f_tab]):
             st.error("Please enter both the SQL Endpoint and Table Name.")
         else:
-            with st.spinner(f"🔄 Fetching schema for '{f_tab}' from Fabric..."):
+            with st.spinner(f"≡ƒöä Fetching schema for '{f_tab}' from Fabric..."):
                 try:
                     from backend.fabric_connector import FabricConnector
                     from backend.ai_recommender import AIRecommender
@@ -1481,7 +1480,7 @@ def render_fabric_table_import():
                     schema = connector.fetch_table_schema(f_sql, f_tab)
                     
                     if schema:
-                        st.success(f"✅ Found {len(schema)} columns in '{f_tab}'.")
+                        st.success(f"Γ£à Found {len(schema)} columns in '{f_tab}'.")
                         
                         with st.spinner("Analyzing..."):
                             recommender = AIRecommender()
@@ -1490,13 +1489,13 @@ def render_fabric_table_import():
                             
                             if recommendations:
                                 st.session_state.candidate_queue = recommendations
-                                st.success(f"✅ AI suggested {len(recommendations)} potential CDEs!")
+                                st.success(f"Γ£à AI suggested {len(recommendations)} potential CDEs!")
                                 st.session_state.onboard_sub_tab = "AI Recommend"
                                 st.rerun()
                             else:
-                                st.warning("⚠️ AI could not identify any CDEs from this schema.")
+                                st.warning("ΓÜá∩╕Å AI could not identify any CDEs from this schema.")
                 except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
+                    st.error(f"Γ¥î Error: {str(e)}")
 
     st.markdown("##### Instructions")
     st.markdown("""
@@ -1624,7 +1623,7 @@ def render_cde_form():
         with col1:
             name = st.text_input("CDE Name *", value=editing_cde['name'] if editing_cde else "")
             
-            # ✅ FIX: Safe domain index lookup
+            # Γ£à FIX: Safe domain index lookup
             domain_index = 0
             if editing_cde and editing_cde['domain'] in DOMAINS:
                 domain_index = DOMAINS.index(editing_cde['domain'])
@@ -1669,7 +1668,7 @@ def render_cde_form():
         </div>
         """, unsafe_allow_html=True)
         
-        # ✅ FIX: Add submit button
+        # Γ£à FIX: Add submit button
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col1:
@@ -1702,10 +1701,10 @@ def render_cde_form():
             
             if editing_id:
                 st.session_state.cdes = [new_cde if c['id'] == editing_id else c for c in st.session_state.cdes]
-                st.success(f"✅ Updated CDE: {name}")
+                st.success(f"Γ£à Updated CDE: {name}")
             else:
                 st.session_state.cdes.append(new_cde)
-                st.success(f"✅ Added CDE: {name}")
+                st.success(f"Γ£à Added CDE: {name}")
             
             st.session_state.show_cde_form = False
             st.session_state.editing_cde_id = None
@@ -1844,13 +1843,13 @@ def render_action_form():
         
         # LLM Generation Section
         st.markdown("---")
-        st.markdown("#### 🤖 AI-Powered Suggestions")
+        st.markdown("#### ≡ƒñû AI-Powered Suggestions")
         
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.info("💡 Click 'Generate AI Suggestions' to get intelligent action recommendations and priority based on the CDE risk profile.")
+            st.info("≡ƒÆí Click 'Generate AI Suggestions' to get intelligent action recommendations and priority based on the CDE risk profile.")
         with col2:
-            generate_clicked = st.form_submit_button("🤖 Generate", use_container_width=True)
+            generate_clicked = st.form_submit_button("≡ƒñû Generate", use_container_width=True)
         
         # Initialize or get existing values
         if editing_action:
@@ -1864,7 +1863,7 @@ def render_action_form():
                 suggestions = generate_action_suggestions(action_name, selected_cde_obj)
                 st.session_state.llm_description = suggestions['description']
                 st.session_state.llm_priority = suggestions['priority']
-                st.success("✅ AI suggestions generated! Review and edit below.")
+                st.success("Γ£à AI suggestions generated! Review and edit below.")
                 st.rerun()
         
         st.markdown("---")
@@ -1948,7 +1947,7 @@ def render_action_form():
             st.session_state.llm_priority = "P2"
             st.session_state.show_action_form = False
             st.session_state.editing_action_id = None
-            st.success("✅ Action saved successfully!")
+            st.success("Γ£à Action saved successfully!")
             st.rerun()
         
         if cancelled:
@@ -1998,7 +1997,7 @@ def render_identify_cde():
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            st.markdown("##### ✅ Qualification Checklist")
+            st.markdown("##### Γ£à Qualification Checklist")
             st.markdown("Check criteria that apply. **3+ criteria = Qualified CDE**")
             
             # Persistent Checklist logic
@@ -2036,7 +2035,7 @@ def render_identify_cde():
             is_qualified = criteria_met >= 3
             
             bg_color = '#dcfce7' if is_qualified else '#f3f4f6'
-            result_text = '✓ QUALIFIED' if is_qualified else 'Not Qualified'
+            result_text = 'Γ£ô QUALIFIED' if is_qualified else 'Not Qualified'
             result_color = '#16a34a' if is_qualified else '#6b7280'
             
             st.markdown(f"""
@@ -2057,9 +2056,9 @@ def render_identify_cde():
                     if existing_idx >= 0:
                         # Update existing
                         st.session_state.cdes[existing_idx]['notes'] += f" | Re-qualified on {datetime.now().strftime('%Y-%m-%d')} ({criteria_met} criteria)"
-                        st.session_state.cdes[existing_idx]['manual_qualified'] = True # 🔹 SET FLAG
-                        st.session_state.cdes[existing_idx]['status'] = 'Qualified' # 🔹 SET STATUS
-                        st.success(f"✅ Updated existing CDE: '{current_cde}'")
+                        st.session_state.cdes[existing_idx]['manual_qualified'] = True # ≡ƒö╣ SET FLAG
+                        st.session_state.cdes[existing_idx]['status'] = 'Qualified' # ≡ƒö╣ SET STATUS
+                        st.success(f"Γ£à Updated existing CDE: '{current_cde}'")
                     else:
                         # Add new (This path is unlikely if selecting from existing, but kept for robustness)
                         st.error("CDE not found in registry.")  
@@ -2167,7 +2166,7 @@ def render_register_page():
                                 st.session_state.fabric_tables = connector.list_tables(sql_end, database_name=sql_db)
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"⚠️ Could not load tables: {str(e)}")
+                                st.error(f"ΓÜá∩╕Å Could not load tables: {str(e)}")
                                 sql_tab = st.text_input("Target Table Name", value="", help="Enter table name manually.", key="sync_tab_manual_tab2")
                     
                     if st.session_state.get('fabric_tables'):
@@ -2220,7 +2219,7 @@ def render_footer():
     st.markdown(
     """
     <div class="ilink-footer">
-        Powered by <strong style="color: #CC0000;">iLink</strong> <strong>Catalyst</strong> &nbsp;|&nbsp; CDE Catalyst v2.0 with AI &nbsp;&nbsp; <span style="color: #CC0000;">◆</span> &nbsp; <strong>iLink Digital</strong>
+        Powered by <strong style="color: #CC0000;">iLink</strong> <strong>Catalyst</strong> &nbsp;|&nbsp; CDE Catalyst v2.0 with AI &nbsp;&nbsp; <span style="color: #CC0000;">Γùå</span> &nbsp; <strong>iLink Digital</strong>
     </div>
     """,
     unsafe_allow_html=True
@@ -2264,7 +2263,7 @@ def render_login():
                     data = base64.b64encode(f.read()).decode("utf-8")
                 logo_html = f'<img src="data:image/png;base64,{data}" style="max-width: 120px; margin-bottom: 24px;">'
             except:
-                logo_html = '<div style="font-size: 64px; margin-bottom: 20px;">🛡️</div>'
+                logo_html = '<div style="font-size: 64px; margin-bottom: 20px;">≡ƒ¢í∩╕Å</div>'
                 
             st.markdown(f"""
             <div style="text-align: center; margin-bottom: 24px;">
@@ -2298,7 +2297,7 @@ def render_login():
 # MAIN APP
 # ============================================
 def main():
-    # 🔒 CRITICAL: Initialize session state ONCE and protect it
+    # ≡ƒöÆ CRITICAL: Initialize session state ONCE and protect it
     init_session_state()
     
     # Check login state
@@ -2309,9 +2308,9 @@ def main():
         render_login()
         return
 
-    # 🛡️ SAFEGUARD: Verify CDE list integrity on every run
+    # ≡ƒ¢í∩╕Å SAFEGUARD: Verify CDE list integrity on every run
     if 'cdes' not in st.session_state:
-        st.error("⚠️ CRITICAL: CDEs list was deleted from session state!")
+        st.error("ΓÜá∩╕Å CRITICAL: CDEs list was deleted from session state!")
         st.session_state.cdes = []
     
     # Initialize settings state
@@ -2325,7 +2324,7 @@ def main():
     # Render sidebar with badge, stepper, and logo
     render_sidebar()
     
-    # 🎯 CONTENT BASED ON SIDEBAR NAVIGATION
+    # ≡ƒÄ» CONTENT BASED ON SIDEBAR NAVIGATION
     selected = st.session_state.selected_tab
     
     if selected == "CDE Onboard":
