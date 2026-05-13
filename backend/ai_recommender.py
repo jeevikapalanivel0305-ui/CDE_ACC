@@ -209,9 +209,11 @@ def render_ai_recommend():
         creds = st.session_state.connector_creds
         f_sql_val = st.session_state.ai_state["f_sql"] if st.session_state.ai_state["f_sql"] else creds.get('fabric_sql_endpoint', '')
 
+        st.info("Note: Direct SQL connection (port 1433) is blocked on Streamlit Cloud. Enter your table name and columns manually below, or use the Excel connector to upload your schema.")
+
         col_sql, col_db = st.columns([3, 1])
         with col_sql:
-            f_sql = st.text_input("SQL Endpoint / Connection String",
+            f_sql = st.text_input("SQL Endpoint (for reference)",
                                  value=f_sql_val,
                                  type="password",
                                  key="ai_f_sql_input",
@@ -223,114 +225,27 @@ def render_ai_recommend():
                                 key="ai_f_db_input")
             creds['fabric_database'] = f_db
 
-        # Authentication mode
-        auth_mode = st.radio("Authentication Mode",
-                             ["Email & Password", "Service Principal"],
-                             horizontal=True, key="ai_auth_mode")
+        fabric_table = st.text_input("Table Name", placeholder="e.g. dbo.Sales_Transactions",
+                                     value=st.session_state.ai_state["f_tab_text"],
+                                     key="ai_f_tab_text_ref", on_change=sync_ai_f_tab_text)
 
-        if auth_mode == "Email & Password":
-            col_em, col_pw = st.columns(2)
-            with col_em:
-                creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''),
-                                                      placeholder="user@domain.com", key="ai_f_email")
-            with col_pw:
-                creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''),
-                                                         type="password", key="ai_f_pwd")
-            col_t, col_c = st.columns(2)
-            with col_t:
-                creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''),
-                                                          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", key="ai_f_tenant_ep")
-            with col_c:
-                creds['fabric_client_id'] = st.text_input("Client ID (App)", value=creds.get('fabric_client_id', '1950a258-227b-4e31-a9cf-717495945fc2'),
-                                                          key="ai_f_client_ep")
-            fabric_tenant_id = creds.get('fabric_tenant_id', '')
-            fabric_client_id = creds.get('fabric_client_id', '1950a258-227b-4e31-a9cf-717495945fc2')
-            fabric_client_secret = None
-
-            def get_ep_token():
-                import msal
-                email = creds.get('fabric_email', '')
-                password = creds.get('fabric_password', '')
-                tenant = fabric_tenant_id or 'organizations'
-                app = msal.PublicClientApplication(fabric_client_id,
-                                                   authority=f"https://login.microsoftonline.com/{tenant}")
-                result = app.acquire_token_by_username_password(
-                    username=email,
-                    password=password,
-                    scopes=["https://database.windows.net/.default"]
-                )
-                if "access_token" in result:
-                    return result["access_token"]
-                raise Exception(result.get("error_description", result.get("error", "Authentication failed")))
-
-        else:
-            col1, col2, col3 = st.columns(3)
-            with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant")
-            with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client")
-            with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret")
-            fabric_client_id = creds.get('fabric_client_id', '')
-            fabric_client_secret = creds.get('fabric_client_secret', '')
-            fabric_tenant_id = creds.get('fabric_tenant_id', '')
-            get_ep_token = None
-
-        # Clear tables if connection changes
-        conn_key = f"{f_sql}|{f_db}|{auth_mode}"
-        if st.session_state.get('prev_conn_key') != conn_key:
-            st.session_state.ai_fabric_tables = []
-            st.session_state['prev_conn_key'] = conn_key
-
-        if st.button("Discover Tables", key="ai_discover_btn"):
-            with st.spinner("Connecting..."):
-                try:
-                    from backend.fabric_connector import FabricConnector
-                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
-                    token = None
-                    if get_ep_token:
-                        try:
-                            token = get_ep_token()
-                            st.info("Token acquired successfully. Connecting to SQL endpoint...")
-                        except Exception as token_err:
-                            st.error(f"Authentication failed (token): {str(token_err)}")
-                            st.stop()
-                    tables = connector.list_tables(f_sql, database_name=f_db or "w1", access_token=token)
-                    st.session_state.ai_fabric_tables = tables
-                    st.session_state.ai_f_token = token
-                    if tables:
-                        st.success(f"Connected! Found {len(tables)} tables.")
-                        st.rerun()
-                    else:
-                        st.warning("Connected but no tables found.")
-                except Exception as e:
-                    err = str(e)
-                    st.error(f"Connection failed: {err}")
-                    if "HYT00" in err or "timeout" in err.lower():
-                        st.warning("The SQL endpoint timed out. This can happen if port 1433 is blocked by your network or Streamlit Cloud. Try entering the table name manually below.")
-
-        # Table selection
-        fabric_tables = st.session_state.get('ai_fabric_tables', [])
-        if fabric_tables:
-            tab_options = ["--- Select Table ---"] + fabric_tables
-            tab_idx = tab_options.index(st.session_state.ai_state["f_tab_sel"]) if st.session_state.ai_state["f_tab_sel"] in tab_options else 0
-            fabric_table = st.selectbox("Select Table", tab_options, index=tab_idx, key="ai_f_tab_sel_ref", on_change=sync_ai_f_tab_sel)
-            if fabric_table == "--- Select Table ---": fabric_table = None
-        else:
-            fabric_table = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", value=st.session_state.ai_state["f_tab_text"], key="ai_f_tab_text_ref", on_change=sync_ai_f_tab_text)
-
-        # Live column discovery
-        if fabric_table and ('prev_ai_f_tab' not in st.session_state or st.session_state.prev_ai_f_tab != fabric_table):
-            with st.spinner(f"Discovering attributes for '{fabric_table}'..."):
-                try:
-                    from backend.fabric_connector import FabricConnector
-                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
-                    token = st.session_state.get('ai_f_token') or (get_ep_token() if get_ep_token else None)
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1", access_token=token)
-                    if schema:
-                        st.session_state.ai_discovered_cols = [c['name'] for c in schema]
-                        st.session_state.prev_ai_f_tab = fabric_table
-                    else:
-                        st.session_state.ai_discovered_cols = []
-                except Exception:
-                    st.session_state.ai_discovered_cols = []
+        # Manual column entry
+        manual_cols_input = st.text_area(
+            "Column Names (comma-separated)",
+            placeholder="e.g. CustomerID, OrderDate, TotalAmount, Region, ProductCode",
+            height=80,
+            key="ai_manual_cols"
+        )
+        if manual_cols_input.strip():
+            manual_cols = [c.strip() for c in manual_cols_input.split(",") if c.strip()]
+            st.session_state.ai_discovered_cols = manual_cols
+            st.success(f"Using {len(manual_cols)} columns for analysis.")
+        
+        # Dummy vars so the rest of the code doesn't break
+        fabric_tenant_id = creds.get('fabric_tenant_id', '')
+        fabric_client_id = creds.get('fabric_client_id', '')
+        fabric_client_secret = creds.get('fabric_client_secret', '')
+        get_ep_token = None
 
     # Business Requirement Input
     requirement = st.text_area("Business Requirement / Context", 
@@ -341,28 +256,13 @@ def render_ai_recommend():
                               on_change=sync_ai_requirement)
     
     if st.button("Analyze & Recommend CDEs", type="primary"):
-        cols_to_analyze = file_columns
+        cols_to_analyze = file_columns if connector_type == "Excel" else st.session_state.get('ai_discovered_cols', [])
         
-        # Handle Fabric Fetching if needed
+        # For Fabric, use manually entered columns (SQL not reachable on Streamlit Cloud)
         if connector_type == "Microsoft Fabric":
-            if not f_sql or not fabric_table:
-                st.error("Please provide both SQL Endpoint and Table Name.")
+            if not fabric_table and not cols_to_analyze:
+                st.error("Please enter a Table Name and/or Column Names.")
                 return
-            
-            with st.spinner("Analyzing..."):
-                try:
-                    from backend.fabric_connector import FabricConnector
-                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
-                    token = st.session_state.get('ai_f_token') or (get_ep_token() if get_ep_token else None)
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1", access_token=token)
-                    if schema:
-                        cols_to_analyze = [c['name'] for c in schema]
-                    else:
-                        st.error("Could not fetch table schema.")
-                        return
-                except Exception as e:
-                    st.error(f"Fabric Error: {str(e)}")
-                    return
         
         if not requirement and not cols_to_analyze:
             st.warning("Please provide context (requirement or schema) for analysis.")
