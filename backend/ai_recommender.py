@@ -2,70 +2,32 @@ import streamlit as st
 import json
 import time
 import pandas as pd
-import os
-from dotenv import load_dotenv
-from google import genai
+from openai import AzureOpenAI
 
-# Load environment variables from .env file
-# We use an absolute path relative to this file's directory
-from pathlib import Path
-dotenv_path = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=dotenv_path)
-
-def get_ai_client(direct_key=None):
-    """Initialize AI client with API key from environment, secrets, or direct input"""
+def get_gemini_client():
+    """Initialize Azure OpenAI client"""
     try:
-        api_key = direct_key
-        
-        # Priority 1: Environment Variable (.env or system)
-        if not api_key:
-            api_key = os.getenv("AI_API_KEY")
-        
-        # Priority 2: Manual .env parse fallback (BOM-aware)
-        if (not api_key or api_key == "YOUR_API_KEY_HERE") and dotenv_path.exists():
-            try:
-                # utf-8-sig handles the Byte Order Mark (BOM) automatically
-                content = dotenv_path.read_text(encoding="utf-8-sig")
-                for line in content.splitlines():
-                    if 'AI_API_KEY=' in line:
-                        api_key = line.split('=', 1)[1].strip().strip('"').strip("'")
-                        os.environ["AI_API_KEY"] = api_key 
-                        break
-            except Exception:
-                pass
-
-        # Priority 3: Streamlit Secrets
-        if not api_key or api_key == "YOUR_API_KEY_HERE":
-            api_key = st.secrets.get("AI_API_KEY")
-            
-        if not api_key or api_key == "YOUR_API_KEY_HERE":
-            st.error(f"⚠️ AI_API_KEY not found in environment or secrets.")
-            st.info(f"💡 The app tried to load from: `{dotenv_path.absolute()}`")
-            if dotenv_path.exists():
-                st.write("✅ .env file exists.")
-                st.write(f"ℹ️ File size: {dotenv_path.stat().st_size} bytes")
-                try:
-                    with open(dotenv_path, 'rb') as f:
-                        header = f.read(10)
-                        st.write(f"🔍 File header bytes: `{header.hex(' ')}`")
-                except: pass
+        api_key = st.secrets.get("AZURE_OPENAI_API_KEY")
+        endpoint = st.secrets.get("AZURE_OPENAI_ENDPOINT")
+        api_version = st.secrets.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+        if not api_key or not endpoint:
+            st.error("⚠️ AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets.")
             return None
-            
-        return genai.Client(api_key=api_key)
+        return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
     except Exception as e:
-        st.error(f"Error initializing AI client: {str(e)}")
+        st.error(f"Error initializing Azure OpenAI client: {str(e)}")
         return None
 
 # ============================================
 # AI RECOMMENDATION LOGIC
 # ============================================
 
-def generate_cde_suggestions(business_requirement, industry="General", file_columns=None, direct_key=None):
-    """Generate CDE suggestions using AI based on business requirement, industry, and optional file schema"""
-    client = get_ai_client(direct_key=direct_key)
+def generate_cde_suggestions(business_requirement, industry="General", file_columns=None):
+    """Generate CDE suggestions using Azure OpenAI based on business requirement, industry, and optional file schema"""
+    client = get_gemini_client()
     
     if not client:
-        st.warning("⚠️ API key not configured. Please add your AI_API_KEY to .env or .streamlit/secrets.toml")
+        st.warning("⚠️ Azure OpenAI not configured. Please check your secrets.toml settings.")
         return []
     
     # Construct Contextual Prompt
@@ -105,12 +67,15 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
     """
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
+        deployment = st.secrets.get("AZURE_OPENAI_DEPLOYMENTNAME", "gpt-4.1")
+        max_tokens = int(st.secrets.get("MAX_TOKENS", 16384))
+        response = client.chat.completions.create(
+            model=deployment,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens
         )
         
-        response_text = response.text
+        response_text = response.choices[0].message.content
         # Clean up code blocks if present
         if "```json" in response_text:
             response_text = response_text.split("```json")[1].split("```")[0].strip()
@@ -125,7 +90,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
 
 def recommend_cdes_from_columns(table_name, columns, industry="General"):
     """Specifically recommend CDEs based on a table schema (columns)"""
-    client = get_ai_client()
+    client = get_gemini_client()
     if not client: return []
     
     prompt = f"""You are a data governance expert in the {industry} industry. 
@@ -135,20 +100,19 @@ def recommend_cdes_from_columns(table_name, columns, industry="General"):
     Respond ONLY with a JSON array."""
     
     try:
-        # Check if client exists
-        if not client:
-            st.error("❌ AI Client not initialized. Please check your API key.")
-            return []
-            
-        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
-        text = response.text
+        deployment = st.secrets.get("AZURE_OPENAI_DEPLOYMENTNAME", "gpt-4.1")
+        max_tokens = int(st.secrets.get("MAX_TOKENS", 16384))
+        response = client.chat.completions.create(
+            model=deployment,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens
+        )
+        text = response.choices[0].message.content
         if "```json" in text: text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text: text = text.split("```")[1].split("```")[0].strip()
         return json.loads(text)
     except Exception as e:
-        st.error(f"❌ AI Prediction Error: {str(e)}")
-        if "403" in str(e):
-            st.info("💡 Your API key might be restricted or restricted by region. Try creating a new one in Google AI Studio.")
+        st.error(f"❌ AI Error: {str(e)}")
         return []
 
 class AIRecommender:
@@ -180,18 +144,42 @@ def render_ai_recommend():
     st.markdown('<h3 style="margin-bottom: 0px;">AI CDE Recommender</h3>', unsafe_allow_html=True)
     st.markdown('<div style="color: #666; margin-bottom: 20px;">Identify Critical Data Elements from your data source using AI analysis.</div>', unsafe_allow_html=True)
     
-    # --- Core Connection Info (Visible as per user markup) ---
+    if "ai_state" not in st.session_state:
+        st.session_state.ai_state = {
+            "industry": "General",
+            "connector": "Excel",
+            "f_sql": "",
+            "f_tab_sel": "--- Select Table ---",
+            "f_tab_text": "",
+            "requirement": ""
+        }
+
+    def sync_ai_industry():
+        st.session_state.ai_state["industry"] = st.session_state.ai_selected_industry
+    def sync_ai_connector():
+        st.session_state.ai_state["connector"] = st.session_state.ai_connector_type
+    def sync_ai_f_sql():
+        st.session_state.ai_state["f_sql"] = st.session_state.ai_f_sql_input
+    def sync_ai_f_tab_sel():
+        st.session_state.ai_state["f_tab_sel"] = st.session_state.ai_f_tab_sel_ref
+    def sync_ai_f_tab_text():
+        st.session_state.ai_state["f_tab_text"] = st.session_state.ai_f_tab_text_ref
+    def sync_ai_requirement():
+        st.session_state.ai_state["requirement"] = st.session_state.ai_requirement
+    
     col_ind, col_conn = st.columns(2)
     
     with col_ind:
         st.markdown("**1. Industry Domain**")
-        selected_industry = st.selectbox("Industry", 
-                                       ["General", "Finance / Banking", "Healthcare", "Retail / E-Commerce", "Manufacturing", "Energy / Utilities", "Insurance"], 
-                                       key="ai_selected_industry")
+        ind_options = ["General", "Finance / Banking", "Healthcare", "Retail / E-Commerce", "Manufacturing", "Energy / Utilities", "Insurance"]
+        ind_idx = ind_options.index(st.session_state.ai_state["industry"]) if st.session_state.ai_state["industry"] in ind_options else 0
+        selected_industry = st.selectbox("Industry", ind_options, index=ind_idx, key="ai_selected_industry", on_change=sync_ai_industry)
         
     with col_conn:
         st.markdown("**2. Data Source**")
-        connector_type = st.selectbox("Connector", ["Excel", "Microsoft Fabric"], key="ai_connector_type")
+        conn_options = ["Excel", "Microsoft Fabric"]
+        conn_idx = conn_options.index(st.session_state.ai_state["connector"]) if st.session_state.ai_state["connector"] in conn_options else 0
+        connector_type = st.selectbox("Connector", conn_options, index=conn_idx, key="ai_connector_type", on_change=sync_ai_connector)
         
         # Reset discovery when connector changes
         if 'prev_ai_connector' not in st.session_state or st.session_state.prev_ai_connector != connector_type:
@@ -217,175 +205,67 @@ def render_ai_recommend():
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
     else:
-        # Fabric Connector UI - Core Fields
-        col_sql, col_db = st.columns([2, 1])
-        with col_sql:
-            f_sql = st.text_input("SQL Endpoint / Connection String", 
-                                 value=st.session_state.connector_creds.get('fabric_sql_endpoint', ''), 
-                                 type="password",
-                                 key="ai_f_sql_input",
-                                 placeholder="xxxxxxxx.datawarehouse.fabric.microsoft.com")
-        with col_db:
-            f_db = st.text_input("Warehouse / Database Name", 
-                                value=st.session_state.connector_creds.get('fabric_database', ''), 
-                                placeholder="e.g. w1",
-                                key="ai_f_db_input")
+        # Fabric Connector UI - Simplified without the grey box and refresh button
+        f_sql_val = st.session_state.ai_state["f_sql"] if st.session_state.ai_state["f_sql"] else st.session_state.connector_creds.get('fabric_sql_endpoint', '')
+        f_sql = st.text_input("SQL Endpoint / Connection String", 
+                             value=f_sql_val, 
+                             type="password",
+                             key="ai_f_sql_input", 
+                             on_change=sync_ai_f_sql)
         
-        # Reset strings for change detection
-        if ('prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql or 
-            'prev_f_db' not in st.session_state or st.session_state.prev_f_db != f_db):
+        
+        # Clear tables if connection string changes
+        if 'prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql:
             st.session_state.ai_fabric_tables = []
             st.session_state.prev_f_sql = f_sql
-            st.session_state.prev_f_db = f_db
-            st.session_state.connector_creds['fabric_sql_endpoint'] = f_sql
-            st.session_state.connector_creds['fabric_database'] = f_db
 
-    # --- Single Minimal Expander (Arrow only) for the rest ---
-    with st.expander("🔽", expanded=False):
-        if connector_type == "Microsoft Fabric":
-            # --- Internal Setup & Authentication Details ---
-            auth_mode = st.radio("Authentication Mode", 
-                                ["Interactive Login (Standard)", "Email & Password (AAD)", "Service Principal (Automation/Cloud)"], 
-                                index=1, horizontal=True, key="ai_auth_mode_radio")
-            
-            creds = st.session_state.connector_creds
-            st.caption("ℹ️ Fabric Endpoints use the SQL Server protocol.")
-
-            if auth_mode == "Service Principal (Automation/Cloud)":
-                col1, col2, col3 = st.columns(3)
-                with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant_fl")
-                with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client_fl")
-                with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret_fl")
-            elif auth_mode == "Email & Password (AAD)":
-                col1, col2 = st.columns(2)
-                with col1: creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_aad")
-                with col2: creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''), type="password", key="ai_f_pwd_aad")
-            else:
-                creds['fabric_email'] = st.text_input("Email (Optional Hint)", value=creds.get('fabric_email', ''), placeholder="user@domain.com", key="ai_f_email_fl")
-                
-                with st.expander("⚙️ Advanced Authentication Settings"):
-                    creds['fabric_custom_client_id'] = st.text_input("Custom Client ID", 
-                                                                 value=creds.get('fabric_custom_client_id', '1950a258-227b-4e31-a9cf-717495945fc2'), 
-                                                                 key="ai_f_custom_cid")
-                    creds['fabric_tenant_id'] = st.text_input("Tenant ID", 
-                                                          value=creds.get('fabric_tenant_id', ''), 
-                                                          key="ai_f_tenant_fl_adv")
-
-            # --- Device Code Flow Step-by-Step UI ---
-            if auth_mode == "Interactive Login (Standard)":
-                col_code, col_verify = st.columns(2)
-                with col_code:
-                    if st.button("🔑 1. Get Login Code", use_container_width=True):
-                        try:
-                            import msal
-                            client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
-                            tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
-                            app = msal.PublicClientApplication(client_id, authority=f"https://login.microsoftonline.com/{tenant}")
-                            flow = app.initiate_device_flow(scopes=["https://database.windows.net/.default"])
-                            if "user_code" in flow:
-                                st.session_state.ai_f_flow = flow
-                                st.rerun()
-                            else:
-                                st.error(f"Flow error: {flow.get('error_description', 'Error initiating flow.')}")
-                        except Exception as e:
-                            st.error(f"Init error: {str(e)}")
-                
-                with col_verify:
-                    if st.button("✅ 2. Verify & Connect", type="primary", use_container_width=True):
-                        if 'ai_f_flow' not in st.session_state:
-                            st.warning("Please click 'Get Login Code' first.")
-                        else:
-                            with st.spinner("Verifying..."):
-                                try:
-                                    import msal
-                                    from backend.fabric_connector import FabricConnector
-                                    client_id = creds.get('fabric_custom_client_id', '').strip() or "1950a258-227b-4e31-a9cf-717495945fc2"
-                                    tenant = creds.get('fabric_tenant_id', '').strip() or "organizations"
-                                    app = msal.PublicClientApplication(client_id, authority=f"https://login.microsoftonline.com/{tenant}")
-                                    result = app.acquire_token_by_device_flow(st.session_state.ai_f_flow)
-                                    if "access_token" in result:
-                                        st.session_state.ai_f_token = result["access_token"]
-                                        connector = FabricConnector("", "", "")
-                                        tables = connector.list_tables(f_sql, database_name=f_db, access_token=st.session_state.ai_f_token)
-                                        st.session_state.ai_fabric_tables = tables
-                                        st.session_state.ai_fabric_error = None
-                                        del st.session_state.ai_f_flow
-                                        st.success(f"Connected! Discovered {len(tables)} tables.")
-                                        st.rerun()
-                                    else:
-                                        st.error("Login not verified.")
-                                except Exception as e:
-                                    st.error(f"Connect error: {str(e)}")
-
-            if 'ai_f_flow' in st.session_state and auth_mode == "Interactive Login (Standard)":
-                flow = st.session_state.ai_f_flow
-                st.markdown(f"""
-                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b;">
-                    <p>1. Go to: <a href="{flow['verification_uri']}" target="_blank">{flow['verification_uri']}</a></p>
-                    <p>2. Enter Code: <span style="font-family: monospace; font-size: 1.2em; color: #ff4b4b;">{flow['user_code']}</span></p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # Traditional Discover Button
-            if auth_mode != "Interactive Login (Standard)":
-                if st.button("🔍 Discover Tables", type="primary", use_container_width=True):
-                    with st.spinner("Connecting..."):
-                        try:
-                            from backend.fabric_connector import FabricConnector
-                            if auth_mode == "Service Principal (Automation/Cloud)":
-                                t_id, c_id, c_sec = creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', '')
-                            else:
-                                t_id, c_id, c_sec = "", creds.get('fabric_email', ''), f"AAD_PWD:{creds.get('fabric_password', '')}"
-                            
-                            connector = FabricConnector(t_id, c_id, c_sec)
-                            tables = connector.list_tables(f_sql, database_name=f_db) 
-                            st.session_state.ai_fabric_tables = tables
-                            if tables: st.success(f"Discovered {len(tables)} tables!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Connection failed: {str(e)}")
-
-            # Troubleshooting & Error Display
-            with st.expander("🛠️ Troubleshooting"):
-                if st.button("🔌 Run Environment Check"):
-                    try:
-                        import pyodbc
-                        st.write("**ODBC Drivers:**", pyodbc.drivers())
-                    except Exception as ex: st.error(str(ex))
-
-            # Table Selection inside expander (if discovered)
-            fabric_tables = st.session_state.get('ai_fabric_tables', [])
-            if fabric_tables:
-                fabric_table = st.selectbox("Select Table", ["--- Select Table ---"] + fabric_tables, key="ai_f_tab_sel_ref")
-                if fabric_table == "--- Select Table ---": fabric_table = None
-            else:
-                fabric_table = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", key="ai_f_tab_text_ref")
-
-            # Column discovery
-            if fabric_table and ('prev_ai_f_tab' not in st.session_state or st.session_state.prev_ai_f_tab != fabric_table):
+        # Trigger fetch automatically if endpoint is provided and list is empty
+        if f_sql and not st.session_state.get('ai_fabric_tables'):
+            with st.spinner("Analyzing..."):
                 try:
                     from backend.fabric_connector import FabricConnector
                     creds = st.session_state.connector_creds
                     connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db, access_token=st.session_state.get('ai_f_token'))
+                    tables = connector.list_tables(f_sql, database_name="w1")
+                    st.session_state.ai_fabric_tables = tables
+                    if tables: st.rerun()
+                except Exception:
+                    pass
+
+        # Conditional Display: Dropdown vs Text Input
+        fabric_tables = st.session_state.get('ai_fabric_tables', [])
+        if fabric_tables:
+            tab_options = ["--- Select Table ---"] + fabric_tables
+            tab_idx = tab_options.index(st.session_state.ai_state["f_tab_sel"]) if st.session_state.ai_state["f_tab_sel"] in tab_options else 0
+            fabric_table = st.selectbox("Select Table", tab_options, index=tab_idx, key="ai_f_tab_sel_ref", on_change=sync_ai_f_tab_sel)
+            if fabric_table == "--- Select Table ---": fabric_table = None
+        else:
+            fabric_table = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", value=st.session_state.ai_state["f_tab_text"], key="ai_f_tab_text_ref", on_change=sync_ai_f_tab_text)
+
+        # Live discovery of Fabric Columns
+        if fabric_table and ('prev_ai_f_tab' not in st.session_state or st.session_state.prev_ai_f_tab != fabric_table):
+            with st.spinner(f"Discovering attributes for '{fabric_table}'..."):
+                try:
+                    from backend.fabric_connector import FabricConnector
+                    creds = st.session_state.connector_creds
+                    connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name="w1")
                     if schema:
                         st.session_state.ai_discovered_cols = [c['name'] for c in schema]
                         st.session_state.prev_ai_f_tab = fabric_table
-                except Exception: pass
+                    else:
+                        st.session_state.ai_discovered_cols = []
+                except Exception:
+                    st.session_state.ai_discovered_cols = []
 
-        # Business Requirement Input (Inside expander now)
-        requirement = st.text_area("Business Requirement / Context", 
-                                  height=100, 
-                                  placeholder="Example: We need to comply with GDPR...",
-                                  key="ai_requirement")
-
-        # API Failsafe inside the setup expander
-        with st.expander("🔑 API Settings (Failsafe)"):
-            direct_key = st.text_input("Direct API Key", value="", type="password", key="ai_direct_api_key")
-            check_key = direct_key or os.getenv("AI_API_KEY")
-            if check_key and len(check_key) > 8:
-                st.success(f"✅ Key Loaded: `{check_key[:4]}...{check_key[-4:]}`")
-
+    # Business Requirement Input
+    requirement = st.text_area("Business Requirement / Context", 
+                              height=100, 
+                              placeholder="Example: We need to comply with GDPR for our European customer data...",
+                              value=st.session_state.ai_state["requirement"],
+                              key="ai_requirement", 
+                              on_change=sync_ai_requirement)
+    
     if st.button("Analyze & Recommend CDEs", type="primary"):
         cols_to_analyze = file_columns
         
@@ -404,16 +284,14 @@ def render_ai_recommend():
                         creds.get('fabric_client_id', ''),
                         creds.get('fabric_client_secret', '')
                     )
-                    # Use the specific database provided by the user
-                    token = st.session_state.get('ai_f_token')
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db, access_token=token)
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name="w1")
                     if schema:
                         cols_to_analyze = [c['name'] for c in schema]
                     else:
-                        st.error(f"Could not fetch table schema for '{fabric_table}' in '{f_db or 'Fabric'}'. Discovery failed.")
+                        st.error("Could not fetch table schema.")
                         return
                 except Exception as e:
-                    st.error(f"Fabric Analysis Error: {str(e)}")
+                    st.error(f"Fabric Error: {str(e)}")
                     return
         
         if not requirement and not cols_to_analyze:
@@ -421,7 +299,7 @@ def render_ai_recommend():
         else:
             # Main Analysis Logic
             with st.spinner("Analyzing..."):
-                suggestions = generate_cde_suggestions(requirement, industry=selected_industry, file_columns=cols_to_analyze, direct_key=direct_key)
+                suggestions = generate_cde_suggestions(requirement, selected_industry, cols_to_analyze)
                 st.session_state.ai_cde_suggestions = suggestions
                 # Store columns for reference display
                 st.session_state.ai_discovered_cols = cols_to_analyze
@@ -481,7 +359,7 @@ def render_ai_recommend():
                                 "securityRisk": 3,
                                 "systemComplexity": 3,
                                 "recoveryDifficulty": 3,
-                                "notes": f"Recommended by AI from {source_system}. Context: {requirement[:50]}..."
+                                "notes": f"Recommended by Gemini AI from {source_system}. Context: {requirement[:50]}..."
                             }
                             st.session_state.cdes.append(new_cde)
                             time.sleep(0.5)
