@@ -236,9 +236,33 @@ def render_ai_recommend():
             with col_pw:
                 creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''),
                                                          type="password", key="ai_f_pwd")
-            fabric_client_id = creds.get('fabric_email', '')
-            fabric_client_secret = f"AAD_PWD:{creds.get('fabric_password', '')}"
-            fabric_tenant_id = ""
+            col_t, col_c = st.columns(2)
+            with col_t:
+                creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''),
+                                                          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", key="ai_f_tenant_ep")
+            with col_c:
+                creds['fabric_client_id'] = st.text_input("Client ID (App)", value=creds.get('fabric_client_id', '1950a258-227b-4e31-a9cf-717495945fc2'),
+                                                          key="ai_f_client_ep")
+            fabric_tenant_id = creds.get('fabric_tenant_id', '')
+            fabric_client_id = creds.get('fabric_client_id', '1950a258-227b-4e31-a9cf-717495945fc2')
+            fabric_client_secret = None
+
+            def get_ep_token():
+                import msal
+                email = creds.get('fabric_email', '')
+                password = creds.get('fabric_password', '')
+                tenant = fabric_tenant_id or 'organizations'
+                app = msal.PublicClientApplication(fabric_client_id,
+                                                   authority=f"https://login.microsoftonline.com/{tenant}")
+                result = app.acquire_token_by_username_password(
+                    username=email,
+                    password=password,
+                    scopes=["https://database.windows.net/.default"]
+                )
+                if "access_token" in result:
+                    return result["access_token"]
+                raise Exception(result.get("error_description", result.get("error", "Authentication failed")))
+
         else:
             col1, col2, col3 = st.columns(3)
             with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant")
@@ -247,6 +271,7 @@ def render_ai_recommend():
             fabric_client_id = creds.get('fabric_client_id', '')
             fabric_client_secret = creds.get('fabric_client_secret', '')
             fabric_tenant_id = creds.get('fabric_tenant_id', '')
+            get_ep_token = None
 
         # Clear tables if connection changes
         conn_key = f"{f_sql}|{f_db}|{auth_mode}"
@@ -258,9 +283,11 @@ def render_ai_recommend():
             with st.spinner("Connecting..."):
                 try:
                     from backend.fabric_connector import FabricConnector
-                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret)
-                    tables = connector.list_tables(f_sql, database_name=f_db or "w1")
+                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
+                    token = get_ep_token() if get_ep_token else None
+                    tables = connector.list_tables(f_sql, database_name=f_db or "w1", access_token=token)
                     st.session_state.ai_fabric_tables = tables
+                    st.session_state.ai_f_token = token
                     if tables:
                         st.success(f"Connected! Found {len(tables)} tables.")
                         st.rerun()
@@ -284,8 +311,9 @@ def render_ai_recommend():
             with st.spinner(f"Discovering attributes for '{fabric_table}'..."):
                 try:
                     from backend.fabric_connector import FabricConnector
-                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret)
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1")
+                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
+                    token = st.session_state.get('ai_f_token') or (get_ep_token() if get_ep_token else None)
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1", access_token=token)
                     if schema:
                         st.session_state.ai_discovered_cols = [c['name'] for c in schema]
                         st.session_state.prev_ai_f_tab = fabric_table
@@ -314,8 +342,9 @@ def render_ai_recommend():
             with st.spinner("Analyzing..."):
                 try:
                     from backend.fabric_connector import FabricConnector
-                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret)
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1")
+                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
+                    token = st.session_state.get('ai_f_token') or (get_ep_token() if get_ep_token else None)
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1", access_token=token)
                     if schema:
                         cols_to_analyze = [c['name'] for c in schema]
                     else:

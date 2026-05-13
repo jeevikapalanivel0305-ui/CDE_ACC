@@ -4,3 +4,5 @@ plotly
 requests
 pyodbc
 openai
+msal
+openpyxl
