@@ -4,14 +4,14 @@ import time
 import pandas as pd
 from openai import AzureOpenAI
 
-def get_gemini_client():
+def get_ai_client():
     """Initialize Azure OpenAI client"""
     try:
         api_key = st.secrets.get("AZURE_OPENAI_API_KEY")
         endpoint = st.secrets.get("AZURE_OPENAI_ENDPOINT")
         api_version = st.secrets.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
         if not api_key or not endpoint:
-            st.error("‚ö†Ô∏è AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets.")
+            st.error("G‹·n+≈ AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets.")
             return None
         return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
     except Exception as e:
@@ -27,7 +27,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
     client = get_gemini_client()
     
     if not client:
-        st.warning("‚ö†Ô∏è Azure OpenAI not configured. Please check your secrets.toml settings.")
+        st.warning("G‹·n+≈ Azure OpenAI not configured. Please check your secrets.toml settings.")
         return []
     
     # Construct Contextual Prompt
@@ -85,7 +85,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
         result = json.loads(response_text)
         return result
     except Exception as e:
-        st.error(f"‚ùå Error generating AI suggestions: {str(e)}")
+        st.error(f"G•Ó Error generating AI suggestions: {str(e)}")
         return []
 
 def recommend_cdes_from_columns(table_name, columns, industry="General"):
@@ -112,7 +112,7 @@ def recommend_cdes_from_columns(table_name, columns, industry="General"):
         elif "```" in text: text = text.split("```")[1].split("```")[0].strip()
         return json.loads(text)
     except Exception as e:
-        st.error(f"‚ùå AI Error: {str(e)}")
+        st.error(f"G•Ó AI Error: {str(e)}")
         return []
 
 class AIRecommender:
@@ -334,7 +334,7 @@ def render_ai_recommend():
                     # Check if already in registry
                     item_name = item.get('name', 'N/A')
                     if item_name.lower() in existing_names:
-                        st.button("‚úÖ Added", key=f"added_btn_{i}", disabled=True)
+                        st.button("G£‡ Added", key=f"added_btn_{i}", disabled=True)
                     else:
                         if st.button("Add to Register", key=f"add_ai_cde_{i}", type="primary"):
                             # Dynamic Source Identification
