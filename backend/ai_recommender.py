@@ -4,7 +4,7 @@ import time
 import pandas as pd
 from openai import AzureOpenAI
 
-def get_gemini_client():
+def get_ai_client():
     """Initialize Azure OpenAI client"""
     try:
         api_key = st.secrets.get("AZURE_OPENAI_API_KEY")
@@ -24,7 +24,7 @@ def get_gemini_client():
 
 def generate_cde_suggestions(business_requirement, industry="General", file_columns=None):
     """Generate CDE suggestions using Azure OpenAI based on business requirement, industry, and optional file schema"""
-    client = get_gemini_client()
+    client = get_ai_client()
     
     if not client:
         st.warning(" Azure OpenAI not configured. Please check your secrets.toml settings.")
@@ -90,7 +90,7 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
 
 def recommend_cdes_from_columns(table_name, columns, industry="General"):
     """Specifically recommend CDEs based on a table schema (columns)"""
-    client = get_gemini_client()
+    client = get_ai_client()
     if not client: return []
     
     prompt = f"""You are a data governance expert in the {industry} industry. 
