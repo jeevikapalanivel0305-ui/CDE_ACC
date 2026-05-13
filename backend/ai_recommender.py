@@ -11,7 +11,7 @@ def get_ai_client():
         endpoint = st.secrets.get("AZURE_OPENAI_ENDPOINT")
         api_version = st.secrets.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
         if not api_key or not endpoint:
-            st.error("GÜán+Å AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets.")
+            st.error("G_ßn++ AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT not found in secrets.")
             return None
         return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
     except Exception as e:
@@ -24,10 +24,10 @@ def get_ai_client():
 
 def generate_cde_suggestions(business_requirement, industry="General", file_columns=None):
     """Generate CDE suggestions using Azure OpenAI based on business requirement, industry, and optional file schema"""
-    client = get_gemini_client()
+    client = get_ai_client()
     
     if not client:
-        st.warning("GÜán+Å Azure OpenAI not configured. Please check your secrets.toml settings.")
+        st.warning("G_ßn++ Azure OpenAI not configured. Please check your secrets.toml settings.")
         return []
     
     # Construct Contextual Prompt
@@ -85,12 +85,12 @@ def generate_cde_suggestions(business_requirement, industry="General", file_colu
         result = json.loads(response_text)
         return result
     except Exception as e:
-        st.error(f"G¥î Error generating AI suggestions: {str(e)}")
+        st.error(f"GÑe Error generating AI suggestions: {str(e)}")
         return []
 
 def recommend_cdes_from_columns(table_name, columns, industry="General"):
     """Specifically recommend CDEs based on a table schema (columns)"""
-    client = get_gemini_client()
+    client = get_ai_client()
     if not client: return []
     
     prompt = f"""You are a data governance expert in the {industry} industry. 
@@ -112,7 +112,7 @@ def recommend_cdes_from_columns(table_name, columns, industry="General"):
         elif "```" in text: text = text.split("```")[1].split("```")[0].strip()
         return json.loads(text)
     except Exception as e:
-        st.error(f"G¥î AI Error: {str(e)}")
+        st.error(f"GÑe AI Error: {str(e)}")
         return []
 
 class AIRecommender:
@@ -334,7 +334,7 @@ def render_ai_recommend():
                     # Check if already in registry
                     item_name = item.get('name', 'N/A')
                     if item_name.lower() in existing_names:
-                        st.button("G£à Added", key=f"added_btn_{i}", disabled=True)
+                        st.button("Gúa Added", key=f"added_btn_{i}", disabled=True)
                     else:
                         if st.button("Add to Register", key=f"add_ai_cde_{i}", type="primary"):
                             # Dynamic Source Identification
