@@ -3,8 +3,4 @@ pandas
 plotly
 requests
 pyodbc
-google-genai
-python-dotenv
-openpyxl
-msal
-msal-extensions
+openai
