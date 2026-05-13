@@ -1592,38 +1592,43 @@ def render_fabric_table_import():
 
             if new_wh_id != st.session_state.get('wh_selected_wh_id'):
                 st.session_state.pop('wh_tables', None)
+                st.session_state.pop('wh_tables_error', None)
                 st.session_state['wh_selected_wh_id'] = new_wh_id
 
-        # ── Auto-fetch tables ─────────────────────────────────────────────────
-        if 'wh_tables' not in st.session_state:
+        # ── Auto-fetch tables via REST (no port 1433) ─────────────────────────
+        if 'wh_tables' not in st.session_state and 'wh_tables_error' not in st.session_state:
             ws_id_for_wh = selected_wh.get('_workspace_id')
             if not ws_id_for_wh:
-                st.warning("Could not determine workspace for this warehouse.")
+                st.error("Could not determine workspace ID for this warehouse.")
                 st.stop()
-            with st.spinner(f"Listing tables in '{wh_choice}'…"):
+            with st.spinner(f"Fetching tables from '{wh_choice}'…"):
                 try:
                     connector = _get_connector()
-                    tables = connector.list_warehouse_tables_rest(ws_id_for_wh, new_wh_id)
+                    tables = connector.list_warehouse_tables_rest(
+                        ws_id_for_wh, new_wh_id, warehouse_name=wh_choice
+                    )
                     st.session_state['wh_tables'] = tables
                 except Exception as e:
-                    st.error(f"Could not list tables: {e}")
-                    st.info(
-                        "If the executeQuery API is unavailable, enter the table name manually below."
-                    )
-                    st.session_state['wh_tables'] = []
+                    st.session_state['wh_tables_error'] = str(e)
+
+        # ── Show error + Retry if fetch failed ───────────────────────────────
+        if 'wh_tables_error' in st.session_state:
+            st.error("Could not fetch tables from the Fabric Warehouse.")
+            with st.expander("Error details & troubleshooting", expanded=True):
+                st.code(st.session_state['wh_tables_error'], language="text")
+            if st.button("Retry", key="wh_retry_btn", type="primary"):
+                st.session_state.pop('wh_tables_error', None)
+                st.rerun()
+            st.stop()
 
         wh_tables = st.session_state.get('wh_tables', [])
 
         with st.container(border=True):
             st.markdown("##### Table")
-            if wh_tables:
-                selected_table = st.selectbox("Select Table", wh_tables, key="wh_table_sel")
-            else:
-                selected_table = st.text_input(
-                    "Table Name (enter manually)",
-                    placeholder="e.g. dbo.Sales_Transactions",
-                    key="wh_table_manual",
-                )
+            if not wh_tables:
+                st.info("No tables found in this warehouse. Ensure the warehouse has at least one table.")
+                st.stop()
+            selected_table = st.selectbox("Select Table", wh_tables, key="wh_table_sel")
 
         with st.container(border=True):
             st.markdown("##### Column Hints (optional)")
@@ -1636,8 +1641,9 @@ def render_fabric_table_import():
 
         if st.button("Recommend CDEs with AI", type="primary", use_container_width=True, key="wh_recommend_btn"):
             if not selected_table:
-                st.error("Please select or enter a table name.")
+                st.error("Please select a table.")
             else:
+
                 col_list = [c.strip() for c in cols_input.split(",") if c.strip()] if cols_input else None
                 with st.spinner(f"Analysing table '{selected_table}'…"):
                     try:

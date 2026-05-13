@@ -124,32 +124,169 @@ class FabricConnector:
             f"{resp.json().get('message', resp.text)}"
         )
 
-    def list_warehouse_tables_rest(self, workspace_id, warehouse_id):
-        """List tables in a Fabric Warehouse via the executeQuery REST endpoint (no SQL/port 1433)."""
-        import re as _re
-        url = f"{self.base_url}/workspaces/{workspace_id}/warehouses/{warehouse_id}/executeQuery"
-        payload = {
-            "queryText": (
-                "SELECT TABLE_SCHEMA, TABLE_NAME "
-                "FROM INFORMATION_SCHEMA.TABLES "
-                "WHERE TABLE_TYPE = 'BASE TABLE' "
-                "ORDER BY TABLE_SCHEMA, TABLE_NAME"
-            )
-        }
-        resp = requests.post(url, headers=self._headers(), json=payload, timeout=60)
-        if resp.status_code in (200, 202):
-            data = resp.json()
-            results = data.get('results', data.get('data', []))
-            if isinstance(results, list) and results:
-                rows = results[0].get('rows', [])
-                return [
-                    f"{row[0]}.{row[1]}" if row[0] not in ('dbo', '') else row[1]
-                    for row in rows if len(row) >= 2
-                ]
-            return []
+    def _get_token_for_scope(self, scope):
+        """Get a fresh access token for a given OAuth2 scope (used for multi-strategy auth)."""
+        url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
+        resp = requests.post(url, data={
+            "grant_type": "client_credentials",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "scope": scope,
+        }, timeout=30)
+        if resp.status_code == 200:
+            return resp.json().get("access_token")
         raise Exception(
-            f"executeQuery failed (HTTP {resp.status_code}): "
-            f"{resp.json().get('message', resp.text)}"
+            f"Token error ({resp.status_code}): "
+            f"{resp.json().get('error_description', resp.text)}"
+        )
+
+    def list_warehouse_tables_rest(self, workspace_id, warehouse_id, warehouse_name=None):
+        """
+        List tables in a Fabric Warehouse using REST APIs — no SQL / port 1433.
+
+        Tries three strategies in order:
+          1. Fabric executeQuery API  (Fabric scope)
+          2. Fabric executeQuery API  (Power BI scope)
+          3. Power BI executeQueries  (DAX INFO.TABLES on the warehouse semantic model)
+        Raises a descriptive exception if all three fail.
+        """
+        errors = []
+
+        # ── Strategy 1: Fabric executeQuery (Fabric scope) ──────────────────
+        try:
+            url = (f"{self.base_url}/workspaces/{workspace_id}"
+                   f"/warehouses/{warehouse_id}/executeQuery")
+            payload = {
+                "queryText": (
+                    "SELECT TABLE_SCHEMA, TABLE_NAME "
+                    "FROM INFORMATION_SCHEMA.TABLES "
+                    "WHERE TABLE_TYPE = 'BASE TABLE' "
+                    "ORDER BY TABLE_SCHEMA, TABLE_NAME"
+                )
+            }
+            resp = requests.post(url, headers=self._headers(), json=payload, timeout=60)
+            if resp.status_code in (200, 202):
+                data = resp.json()
+                results = data.get('results', data.get('data', []))
+                if isinstance(results, list) and results:
+                    rows = results[0].get('rows', [])
+                    if rows:
+                        return [
+                            f"{row[0]}.{row[1]}" if row[0] not in ('dbo', '') else row[1]
+                            for row in rows if len(row) >= 2
+                        ]
+            errors.append(
+                f"Strategy 1 (Fabric executeQuery): "
+                f"HTTP {resp.status_code} — {resp.text[:300]}"
+            )
+        except Exception as exc:
+            errors.append(f"Strategy 1 (Fabric executeQuery): {exc}")
+
+        # ── Strategy 2: Fabric executeQuery (Power BI scope) ────────────────
+        try:
+            pbi_scope = "https://analysis.windows.net/powerbi/api/.default"
+            pbi_token = self._get_token_for_scope(pbi_scope)
+            pbi_headers = {
+                "Authorization": f"Bearer {pbi_token}",
+                "Content-Type": "application/json",
+            }
+            url = (f"{self.base_url}/workspaces/{workspace_id}"
+                   f"/warehouses/{warehouse_id}/executeQuery")
+            resp = requests.post(url, headers=pbi_headers, json=payload, timeout=60)
+            if resp.status_code in (200, 202):
+                data = resp.json()
+                results = data.get('results', data.get('data', []))
+                if isinstance(results, list) and results:
+                    rows = results[0].get('rows', [])
+                    if rows:
+                        return [
+                            f"{row[0]}.{row[1]}" if row[0] not in ('dbo', '') else row[1]
+                            for row in rows if len(row) >= 2
+                        ]
+            errors.append(
+                f"Strategy 2 (Fabric executeQuery / PBI token): "
+                f"HTTP {resp.status_code} — {resp.text[:300]}"
+            )
+        except Exception as exc:
+            errors.append(f"Strategy 2 (Fabric executeQuery / PBI token): {exc}")
+
+        # ── Strategy 3: Power BI executeQueries – DAX INFO.TABLES() ─────────
+        try:
+            pbi_scope = "https://analysis.windows.net/powerbi/api/.default"
+            pbi_token = self._get_token_for_scope(pbi_scope)
+            pbi_headers = {
+                "Authorization": f"Bearer {pbi_token}",
+                "Content-Type": "application/json",
+            }
+
+            # Find the semantic model linked to this warehouse in the workspace
+            ds_resp = requests.get(
+                f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets",
+                headers=pbi_headers, timeout=30
+            )
+            if ds_resp.status_code != 200:
+                raise Exception(
+                    f"Datasets list HTTP {ds_resp.status_code}: {ds_resp.text[:200]}"
+                )
+
+            datasets = ds_resp.json().get('value', [])
+            # Prefer the dataset with the same name as the warehouse; else try all
+            if warehouse_name:
+                ordered = sorted(
+                    datasets,
+                    key=lambda d: 0 if d.get('name', '').lower() == warehouse_name.lower() else 1
+                )
+            else:
+                ordered = datasets
+
+            for ds in ordered:
+                dataset_id = ds['id']
+                dax_resp = requests.post(
+                    f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}"
+                    f"/datasets/{dataset_id}/executeQueries",
+                    headers=pbi_headers,
+                    json={
+                        "queries": [{
+                            "query": (
+                                "EVALUATE SELECTCOLUMNS("
+                                "  FILTER(INFO.TABLES(), NOT [IsHidden]),"
+                                "  \"Name\", [Name]"
+                                ")"
+                            )
+                        }],
+                        "serializerSettings": {"includeNulls": True},
+                    },
+                    timeout=60,
+                )
+                if dax_resp.status_code == 200:
+                    dax_data = dax_resp.json()
+                    rows = (
+                        dax_data.get('results', [{}])[0]
+                        .get('tables', [{}])[0]
+                        .get('rows', [])
+                    )
+                    # Column key may be "Name" or "[Name]" depending on API version
+                    tables = [
+                        row.get('Name', row.get('[Name]', ''))
+                        for row in rows
+                    ]
+                    tables = [t for t in tables if t]
+                    if tables:
+                        return tables
+            errors.append(
+                "Strategy 3 (PBI DAX INFO.TABLES): no tables returned from any dataset"
+            )
+        except Exception as exc:
+            errors.append(f"Strategy 3 (PBI DAX INFO.TABLES): {exc}")
+
+        # ── All strategies failed ────────────────────────────────────────────
+        raise Exception(
+            "Could not list tables from the Fabric Warehouse.\n\n"
+            "Troubleshooting checklist:\n"
+            "• Service Principal must have the 'Contributor' role on the Fabric workspace\n"
+            "• The warehouse must contain at least one table\n"
+            "• For DAX strategy: the SP needs 'Dataset.ReadWrite.All' in Power BI\n\n"
+            "Technical details:\n" + "\n".join(errors)
         )
 
     @staticmethod
