@@ -1,4 +1,4 @@
-"""
+﻿"""
 Microsoft Fabric Connector
 - Authentication via Azure AD
 - Fabric Item discovery (Workspaces -> Items)
@@ -56,7 +56,7 @@ class FabricConnector:
                  return False, "Authentication failed: No access token received"
 
             if debug:
-                print("✅ Authentication successful")
+                print(" Authentication successful")
 
             return True, "Authenticated successfully"
         
@@ -106,7 +106,7 @@ class FabricConnector:
             # (For demonstration until Service Principal has correct Fabric Admin scopes)
             # ---------------------------------------------------------
             if debug:
-                print("⚠️ Using Simulated Fabric Data for demonstration (API might require Admin consent)")
+                print(" Using Simulated Fabric Data for demonstration (API might require Admin consent)")
             
             # Simulated Fabric Items
             fabric_items = [
@@ -256,7 +256,7 @@ class FabricConnector:
                 server_name += ",1433"
             
             connection_string = f"Driver={{{best_driver}}};Server={server_name}"
-            connection_string += ";Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=60"
+            connection_string += ";Encrypt=yes;TrustServerCertificate=no;Connection Timeout=90"
             
             if database_name:
                 connection_string += f";Database={database_name}"
@@ -267,7 +267,7 @@ class FabricConnector:
             # 3. Handle Authentication
             if access_token:
                 # TOKEN MODE: String must NOT have UID/PWD/Authentication
-                print("🔑 [SQL] Connecting using Access Token (MSAL)...")
+                print(" [SQL] Connecting using Access Token (MSAL)...")
             elif "AUTHENTICATION=" not in connection_string.upper():
                 if self.client_id and self.client_secret:
                     # Service Principal
@@ -288,23 +288,21 @@ class FabricConnector:
             if "PWD=" in log_str:
                 import re
                 log_str = re.sub(r"PWD=[^;]+", "PWD=********", connection_string)
-            print(f"🔗 [SQL] String: {log_str}")
+            print(f" [SQL] String: {log_str}")
             
             # 4. Connect
             if access_token:
-                # Convert token to bytes for ODBC attribute
+                # Convert token to bytes for ODBC attribute (correct format for ODBC Driver on Linux/Windows)
                 token_bytes = access_token.encode("utf-16-le")
-                token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
-                
-                # Create connection with token before connecting
-                conn = pyodbc.connect(connection_string, timeout=60, autocommit=True, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+                token_struct = struct.pack('<I', len(token_bytes)) + token_bytes
+                conn = pyodbc.connect(connection_string, timeout=90, autocommit=True, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
             else:
-                conn = pyodbc.connect(connection_string, timeout=60, autocommit=True)
+                conn = pyodbc.connect(connection_string, timeout=90, autocommit=True)
                 
-            print("✅ [SQL] Connection successful.")
+            print(" [SQL] Connection successful.")
             return conn
         except Exception as e:
-            print(f"❌ [SQL] Connection error: {str(e)}")
+            print(f" [SQL] Connection error: {str(e)}")
             raise e
 
     def list_tables(self, connection_string, database_name=None, access_token=None):
@@ -384,7 +382,7 @@ class FabricConnector:
             
             # Step 1: Create table if needed
             if create_if_not_exists:
-                print(f"🛠️ [SQL] Preparing table '{table_name}'...")
+                print(f" [SQL] Preparing table '{table_name}'...")
                 cursor.execute(f"""
                     IF OBJECT_ID('{table_name}', 'U') IS NULL 
                     CREATE TABLE {table_name} (
@@ -404,17 +402,17 @@ class FabricConnector:
             data_to_insert = [tuple(x) for x in df_sync.values]
             query = f"INSERT INTO {table_name} (id, name, domain, definition, sourceSystem, businessImpact, regulatoryCompliance, dataQualityRisk) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
             
-            print(f"🚀 [SQL] Syncing {len(data_to_insert)} records to {table_name}...")
+            print(f" [SQL] Syncing {len(data_to_insert)} records to {table_name}...")
             
             # Performance optimization: enable fast_executemany
             cursor.fast_executemany = True
             cursor.executemany(query, data_to_insert)
             
             conn.commit()
-            print(f"✅ [SQL] Sync complete for {table_name}.")
+            print(f" [SQL] Sync complete for {table_name}.")
             return True, f"Successfully synced {len(data_to_insert)} records to '{table_name}'."
         except Exception as e:
-            print(f"❌ [SQL] Sync error: {str(e)}")
+            print(f" [SQL] Sync error: {str(e)}")
             if conn: conn.rollback()
             return False, f"Sync failed: {str(e)}"
         finally:

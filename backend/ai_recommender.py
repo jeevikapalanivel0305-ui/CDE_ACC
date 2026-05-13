@@ -284,7 +284,14 @@ def render_ai_recommend():
                 try:
                     from backend.fabric_connector import FabricConnector
                     connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret or '')
-                    token = get_ep_token() if get_ep_token else None
+                    token = None
+                    if get_ep_token:
+                        try:
+                            token = get_ep_token()
+                            st.info("Token acquired successfully. Connecting to SQL endpoint...")
+                        except Exception as token_err:
+                            st.error(f"Authentication failed (token): {str(token_err)}")
+                            st.stop()
                     tables = connector.list_tables(f_sql, database_name=f_db or "w1", access_token=token)
                     st.session_state.ai_fabric_tables = tables
                     st.session_state.ai_f_token = token
@@ -294,7 +301,10 @@ def render_ai_recommend():
                     else:
                         st.warning("Connected but no tables found.")
                 except Exception as e:
-                    st.error(f"Connection failed: {str(e)}")
+                    err = str(e)
+                    st.error(f"Connection failed: {err}")
+                    if "HYT00" in err or "timeout" in err.lower():
+                        st.warning("The SQL endpoint timed out. This can happen if port 1433 is blocked by your network or Streamlit Cloud. Try entering the table name manually below.")
 
         # Table selection
         fabric_tables = st.session_state.get('ai_fabric_tables', [])
