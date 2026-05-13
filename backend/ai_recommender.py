@@ -205,34 +205,71 @@ def render_ai_recommend():
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
     else:
-        # Fabric Connector UI - Simplified without the grey box and refresh button
-        f_sql_val = st.session_state.ai_state["f_sql"] if st.session_state.ai_state["f_sql"] else st.session_state.connector_creds.get('fabric_sql_endpoint', '')
-        f_sql = st.text_input("SQL Endpoint / Connection String", 
-                             value=f_sql_val, 
-                             type="password",
-                             key="ai_f_sql_input", 
-                             on_change=sync_ai_f_sql)
-        
-        
-        # Clear tables if connection string changes
-        if 'prev_f_sql' not in st.session_state or st.session_state.prev_f_sql != f_sql:
-            st.session_state.ai_fabric_tables = []
-            st.session_state.prev_f_sql = f_sql
+        # Fabric Connector UI
+        creds = st.session_state.connector_creds
+        f_sql_val = st.session_state.ai_state["f_sql"] if st.session_state.ai_state["f_sql"] else creds.get('fabric_sql_endpoint', '')
 
-        # Trigger fetch automatically if endpoint is provided and list is empty
-        if f_sql and not st.session_state.get('ai_fabric_tables'):
-            with st.spinner("Analyzing..."):
+        col_sql, col_db = st.columns([3, 1])
+        with col_sql:
+            f_sql = st.text_input("SQL Endpoint / Connection String",
+                                 value=f_sql_val,
+                                 type="password",
+                                 key="ai_f_sql_input",
+                                 on_change=sync_ai_f_sql)
+        with col_db:
+            f_db = st.text_input("Database / Warehouse",
+                                value=creds.get('fabric_database', ''),
+                                placeholder="e.g. w1",
+                                key="ai_f_db_input")
+            creds['fabric_database'] = f_db
+
+        # Authentication mode
+        auth_mode = st.radio("Authentication Mode",
+                             ["Email & Password", "Service Principal"],
+                             horizontal=True, key="ai_auth_mode")
+
+        if auth_mode == "Email & Password":
+            col_em, col_pw = st.columns(2)
+            with col_em:
+                creds['fabric_email'] = st.text_input("Email", value=creds.get('fabric_email', ''),
+                                                      placeholder="user@domain.com", key="ai_f_email")
+            with col_pw:
+                creds['fabric_password'] = st.text_input("Password", value=creds.get('fabric_password', ''),
+                                                         type="password", key="ai_f_pwd")
+            fabric_client_id = creds.get('fabric_email', '')
+            fabric_client_secret = f"AAD_PWD:{creds.get('fabric_password', '')}"
+            fabric_tenant_id = ""
+        else:
+            col1, col2, col3 = st.columns(3)
+            with col1: creds['fabric_tenant_id'] = st.text_input("Tenant ID", value=creds.get('fabric_tenant_id', ''), key="ai_f_tenant")
+            with col2: creds['fabric_client_id'] = st.text_input("Client ID", value=creds.get('fabric_client_id', ''), key="ai_f_client")
+            with col3: creds['fabric_client_secret'] = st.text_input("Client Secret", value=creds.get('fabric_client_secret', ''), type="password", key="ai_f_secret")
+            fabric_client_id = creds.get('fabric_client_id', '')
+            fabric_client_secret = creds.get('fabric_client_secret', '')
+            fabric_tenant_id = creds.get('fabric_tenant_id', '')
+
+        # Clear tables if connection changes
+        conn_key = f"{f_sql}|{f_db}|{auth_mode}"
+        if st.session_state.get('prev_conn_key') != conn_key:
+            st.session_state.ai_fabric_tables = []
+            st.session_state['prev_conn_key'] = conn_key
+
+        if st.button("Discover Tables", key="ai_discover_btn"):
+            with st.spinner("Connecting..."):
                 try:
                     from backend.fabric_connector import FabricConnector
-                    creds = st.session_state.connector_creds
-                    connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                    tables = connector.list_tables(f_sql, database_name="w1")
+                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret)
+                    tables = connector.list_tables(f_sql, database_name=f_db or "w1")
                     st.session_state.ai_fabric_tables = tables
-                    if tables: st.rerun()
-                except Exception:
-                    pass
+                    if tables:
+                        st.success(f"Connected! Found {len(tables)} tables.")
+                        st.rerun()
+                    else:
+                        st.warning("Connected but no tables found.")
+                except Exception as e:
+                    st.error(f"Connection failed: {str(e)}")
 
-        # Conditional Display: Dropdown vs Text Input
+        # Table selection
         fabric_tables = st.session_state.get('ai_fabric_tables', [])
         if fabric_tables:
             tab_options = ["--- Select Table ---"] + fabric_tables
@@ -242,14 +279,13 @@ def render_ai_recommend():
         else:
             fabric_table = st.text_input("Table Name", placeholder="e.g. Sales_Transactions", value=st.session_state.ai_state["f_tab_text"], key="ai_f_tab_text_ref", on_change=sync_ai_f_tab_text)
 
-        # Live discovery of Fabric Columns
+        # Live column discovery
         if fabric_table and ('prev_ai_f_tab' not in st.session_state or st.session_state.prev_ai_f_tab != fabric_table):
             with st.spinner(f"Discovering attributes for '{fabric_table}'..."):
                 try:
                     from backend.fabric_connector import FabricConnector
-                    creds = st.session_state.connector_creds
-                    connector = FabricConnector(creds.get('fabric_tenant_id', ''), creds.get('fabric_client_id', ''), creds.get('fabric_client_secret', ''))
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name="w1")
+                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret)
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1")
                     if schema:
                         st.session_state.ai_discovered_cols = [c['name'] for c in schema]
                         st.session_state.prev_ai_f_tab = fabric_table
@@ -278,13 +314,8 @@ def render_ai_recommend():
             with st.spinner("Analyzing..."):
                 try:
                     from backend.fabric_connector import FabricConnector
-                    creds = st.session_state.connector_creds
-                    connector = FabricConnector(
-                        creds.get('fabric_tenant_id', ''),
-                        creds.get('fabric_client_id', ''),
-                        creds.get('fabric_client_secret', '')
-                    )
-                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name="w1")
+                    connector = FabricConnector(fabric_tenant_id, fabric_client_id, fabric_client_secret)
+                    schema = connector.fetch_table_schema(f_sql, fabric_table, database_name=f_db or "w1")
                     if schema:
                         cols_to_analyze = [c['name'] for c in schema]
                     else:
